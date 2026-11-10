@@ -80,6 +80,33 @@ export interface RiskLevel {
   score: number;
 }
 
+export interface TradePlan {
+  entry: number;
+  stop_loss: number;
+  target_1: number;
+  target_2: number;
+  risk_reward: string;
+}
+
+export interface IndicatorSignal {
+  name: string;
+  value: string;
+  sentiment: "BULLISH" | "BEARISH" | "NEUTRAL";
+  weight: string;
+}
+
+export interface MACDData {
+  macd: number;
+  signal: number;
+  hist: number;
+}
+
+export interface BollingerData {
+  upper: number;
+  middle: number;
+  lower: number;
+}
+
 export interface Prediction {
   ticker: string;
   current_price: number;
@@ -91,6 +118,11 @@ export interface Prediction {
   ma20: number;
   day_change_pct: number;
   strength: number;
+  rsi?: number;
+  macd?: MACDData;
+  bollinger?: BollingerData;
+  trade_plan?: TradePlan;
+  breakdown?: IndicatorSignal[];
 }
 
 export interface MarketDepthLevel {

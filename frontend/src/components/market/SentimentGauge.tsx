@@ -1,18 +1,28 @@
-import React from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Brain,
   RefreshCw,
-  Activity,
+  Target,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
+  Sliders,
 } from "lucide-react";
 import { marketApi, predictionApi } from "../../services/api";
 import { SentimentResponse, Prediction } from "../../types";
+import { useAppStore } from "../../store/useAppStore";
 
 interface SentimentGaugeProps {
   ticker?: string;
 }
 
 export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIANCE" }) => {
+  const { setOrderSide, setOrderType, setOrderPrice, setTriggerPrice } = useAppStore();
+  const [showDetails, setShowDetails] = useState<boolean>(true);
+  const [appliedFeedback, setAppliedFeedback] = useState<boolean>(false);
+
   // 1. Fetch Global Market Sentiment
   const {
     data: sentiment,
@@ -23,7 +33,7 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
     refetchInterval: 30000,
   });
 
-  // 2. Fetch AI Stock Prediction for the active ticker
+  // 2. Fetch AI Multi-Indicator Technical Ensemble for active ticker
   const {
     data: prediction,
     isFetching: isPredFetching,
@@ -39,13 +49,22 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
     refetchPrediction();
   };
 
+  const handleApplyTradePlan = () => {
+    if (!prediction?.trade_plan) return;
+    const plan = prediction.trade_plan;
+    setOrderSide(prediction.signal === "SELL" ? "SELL" : "BUY");
+    setOrderType("LIMIT");
+    setOrderPrice(plan.entry);
+    setTriggerPrice(plan.stop_loss);
+    setAppliedFeedback(true);
+    setTimeout(() => setAppliedFeedback(false), 2500);
+  };
+
   const sentimentScore = sentiment?.score ?? 68;
   const sentimentLabel = sentiment?.label ?? "BULLISH";
 
-  // Calculate needle angle on a 180-degree semicircular gauge (-90deg to +90deg)
-  // Score 0 -> -90 deg (Extreme Bearish), 50 -> 0 deg (Neutral), 100 -> +90 deg (Extreme Bullish)
+  // Semicircular needle angle (-90deg to +90deg)
   const needleAngle = -90 + (sentimentScore / 100) * 180;
-
   const isBullish = sentimentLabel === "BULLISH";
   const isBearish = sentimentLabel === "BEARISH";
 
@@ -60,19 +79,19 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
     }
   };
 
-  const getRiskBadge = (level: string) => {
-    switch (level) {
-      case "LOW":
-        return "bg-[#00C087]/15 text-[#00C087] border-[#00C087]/30";
-      case "HIGH":
-        return "bg-[#F04452]/15 text-[#F04452] border-[#F04452]/30";
+  const getSentimentPill = (sent: string) => {
+    switch (sent) {
+      case "BULLISH":
+        return "text-[#00C087] bg-[#00C087]/15 border-[#00C087]/30";
+      case "BEARISH":
+        return "text-[#F04452] bg-[#F04452]/15 border-[#F04452]/30";
       default:
-        return "bg-[#F5B942]/15 text-[#F5B942] border-[#F5B942]/30";
+        return "text-[#F5B942] bg-[#F5B942]/15 border-[#F5B942]/30";
     }
   };
 
   return (
-    <div className="nexus-card p-4 select-none relative overflow-hidden">
+    <div className="nexus-card p-4 select-none relative overflow-hidden space-y-3.5">
       {/* Header with AI Brand Indicator */}
       <div className="flex items-center justify-between pb-3 border-b border-[#26354B]">
         <div className="flex items-center space-x-2">
@@ -82,14 +101,14 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
           <div>
             <div className="flex items-center space-x-2">
               <span className="font-heading font-bold text-xs uppercase tracking-wider text-[#F1F5FC]">
-                AI Intelligence Engine
+                AI Strategy Engine
               </span>
               <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#386BFF] text-white">
-                ML v2.4
+                v3.0 Ensemble
               </span>
             </div>
             <span className="text-[10px] text-[#94A3B8]">
-              Neural Sentiment & Technical Crossover
+              RSI • MACD • Bollinger • ATR Plan • News NLP
             </span>
           </div>
         </div>
@@ -97,17 +116,16 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
         <button
           onClick={handleRefresh}
           className="p-1.5 rounded-md text-[#94A3B8] hover:text-[#386BFF] hover:bg-[#1A2940] transition-all"
-          title="Refresh AI Analysis"
+          title="Refresh AI Ensemble Analysis"
         >
           <RefreshCw size={14} className={isPredFetching ? "animate-spin text-[#386BFF]" : ""} />
         </button>
       </div>
 
       {/* Semicircular SVG Gauge: Market Sentiment */}
-      <div className="pt-3 pb-1 flex flex-col items-center">
-        <div className="relative w-48 h-28 flex items-center justify-center">
+      <div className="pt-2 pb-1 flex flex-col items-center">
+        <div className="relative w-48 h-26 flex items-center justify-center">
           <svg viewBox="0 0 200 115" className="w-full h-full overflow-visible">
-            {/* Background Arc Tracks */}
             {/* Bearish Arc (Left) */}
             <path
               d="M 20 100 A 80 80 0 0 1 73 37"
@@ -163,7 +181,7 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
               {sentimentLabel}
             </span>
             <span className="text-[10px] text-[#94A3B8] block">
-              Score: {sentimentScore} / 100
+              Market Score: {sentimentScore} / 100
             </span>
           </div>
         </div>
@@ -176,89 +194,134 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
         </div>
       </div>
 
-      {/* Consensus Distribution Bar */}
-      <div className="mt-3 p-2.5 rounded bg-[#0B1120] border border-[#26354B]/60">
-        <div className="flex justify-between text-[10px] font-mono-numbers text-[#94A3B8] mb-1">
-          <span className="text-[#00C087]">Buy: {sentiment?.buy ?? 65}%</span>
-          <span className="text-[#F5B942]">Hold: {sentiment?.hold ?? 25}%</span>
-          <span className="text-[#F04452]">Sell: {sentiment?.sell ?? 10}%</span>
+      {/* Stock Signal & Confidence Banner */}
+      <div className="p-2.5 rounded-md bg-[#0B1120] border border-[#26354B] flex items-center justify-between">
+        <div>
+          <div className="text-xs font-bold text-[#F1F5FC] flex items-center space-x-1.5">
+            <span>{ticker} Ensemble Signal</span>
+          </div>
+          <span className="text-[10px] text-[#94A3B8] font-mono">
+            Model Conviction: <strong className="text-[#F1F5FC]">{prediction?.confidence ?? 82}%</strong>
+          </span>
         </div>
-        <div className="w-full h-1.5 rounded-full bg-[#1A2940] flex overflow-hidden">
-          <div
-            className="bg-[#00C087] h-full transition-all duration-500"
-            style={{ width: `${sentiment?.buy ?? 65}%` }}
-          />
-          <div
-            className="bg-[#F5B942] h-full transition-all duration-500"
-            style={{ width: `${sentiment?.hold ?? 25}%` }}
-          />
-          <div
-            className="bg-[#F04452] h-full transition-all duration-500"
-            style={{ width: `${sentiment?.sell ?? 10}%` }}
-          />
-        </div>
+
+        {prediction && (
+          <span
+            className={`px-2.5 py-1 rounded text-xs font-bold border font-mono tracking-wider ${getSignalBadge(
+              prediction.signal
+            )}`}
+          >
+            {prediction.recommendation}
+          </span>
+        )}
       </div>
 
-      {/* Stock-Specific AI Prediction Card for Active Ticker */}
-      <div className="mt-3 pt-3 border-t border-[#26354B] space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-[#F1F5FC] flex items-center space-x-1">
-            <span>{ticker} AI Prediction</span>
+      {/* Automated Trade Plan Card (Entry, Targets, Stop Loss, Risk/Reward) */}
+      {prediction?.trade_plan && (
+        <div className="p-3 rounded-md bg-[#0B1120] border border-[#386BFF]/30 relative overflow-hidden space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#F1F5FC] flex items-center space-x-1">
+              <Target size={14} className="text-[#386BFF]" />
+              <span>AI Trade Plan</span>
+            </span>
+
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#386BFF]/20 text-[#386BFF] border border-[#386BFF]/40">
+              R:R {prediction.trade_plan.risk_reward}
+            </span>
+          </div>
+
+          {/* Price Targets Ladder */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono-numbers pt-1">
+            <div className="p-1.5 rounded bg-[#111C30] border border-[#26354B]">
+              <span className="text-[10px] text-[#94A3B8] block">Entry Level</span>
+              <span className="font-bold text-[#F1F5FC] block mt-0.5">
+                ₹{prediction.trade_plan.entry.toFixed(2)}
+              </span>
+            </div>
+
+            <div className="p-1.5 rounded bg-[#111C30] border border-[#F04452]/30">
+              <span className="text-[10px] text-[#F04452] block">Stop Loss (SL)</span>
+              <span className="font-bold text-[#F04452] block mt-0.5">
+                ₹{prediction.trade_plan.stop_loss.toFixed(2)}
+              </span>
+            </div>
+
+            <div className="p-1.5 rounded bg-[#111C30] border border-[#00C087]/30">
+              <span className="text-[10px] text-[#00C087] block">Target 1</span>
+              <span className="font-bold text-[#00C087] block mt-0.5">
+                ₹{prediction.trade_plan.target_1.toFixed(2)}
+              </span>
+            </div>
+
+            <div className="p-1.5 rounded bg-[#111C30] border border-[#00C087]/30">
+              <span className="text-[10px] text-[#00C087] block">Target 2 (Ext.)</span>
+              <span className="font-bold text-[#00C087] block mt-0.5">
+                ₹{prediction.trade_plan.target_2.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {/* 1-Click Order Form Injection */}
+          <button
+            onClick={handleApplyTradePlan}
+            className="w-full mt-2 py-1.5 rounded bg-[#386BFF]/20 hover:bg-[#386BFF] text-[#386BFF] hover:text-white text-xs font-semibold border border-[#386BFF]/40 transition-all flex items-center justify-center space-x-1.5"
+          >
+            {appliedFeedback ? (
+              <>
+                <CheckCircle2 size={13} />
+                <span>Trade Plan Applied to Order Panel!</span>
+              </>
+            ) : (
+              <>
+                <Sliders size={13} />
+                <span>Apply Levels to Order Entry</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Multi-Indicator Technical Breakdown Accordion */}
+      <div className="pt-2 border-t border-[#26354B]">
+        <button
+          onClick={() => setShowDetails(!showDetails)}
+          className="w-full flex items-center justify-between text-xs font-semibold text-[#94A3B8] hover:text-[#F1F5FC] transition-colors pb-1"
+        >
+          <span className="flex items-center space-x-1">
+            <Layers size={13} className="text-[#386BFF]" />
+            <span>Indicator Consensus Breakdown</span>
           </span>
+          {showDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
 
-          {prediction && (
-            <span
-              className={`px-2 py-0.5 rounded text-xs font-bold border font-mono ${getSignalBadge(
-                prediction.signal
-              )}`}
-            >
-              SIGNAL: {prediction.signal}
-            </span>
-          )}
-        </div>
-
-        {/* AI Recommendation Summary */}
-        <div className="p-2.5 rounded bg-[#0B1120] border border-[#26354B] text-xs">
-          <div className="flex items-center justify-between mb-1.5 font-mono-numbers">
-            <span className="text-[11px] text-[#94A3B8] flex items-center space-x-1">
-              <Activity size={13} className="text-[#386BFF]" />
-              <span>Model Confidence:</span>
-            </span>
-            <span className="font-bold text-[#F1F5FC]">
-              {prediction?.confidence ?? 82}%
-            </span>
-          </div>
-
-          <p className="text-[11px] text-[#F1F5FC] leading-relaxed">
-            {prediction?.recommendation ||
-              `Bullish momentum crossover detected for ${ticker}. 5-Day moving average trending positively with robust institutional volume.`}
-          </p>
-
-          {/* Risk Level & MA spread */}
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#26354B]/50 text-[10px] font-mono-numbers">
-            <div className="flex items-center space-x-1 text-[#94A3B8]">
-              <span>Risk:</span>
-              <span
-                className={`px-1.5 py-0.2 rounded font-bold border ${getRiskBadge(
-                  prediction?.risk?.level || "LOW"
-                )}`}
+        {showDetails && prediction?.breakdown && (
+          <div className="space-y-1.5 mt-2">
+            {prediction.breakdown.map((item, idx) => (
+              <div
+                key={idx}
+                className="p-2 rounded bg-[#0B1120] border border-[#26354B]/60 flex items-center justify-between text-xs font-mono-numbers"
               >
-                {prediction?.risk?.level || "LOW"}
-              </span>
-            </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold text-[#F1F5FC] text-[11px] font-sans">
+                      {item.name}
+                    </span>
+                    <span className="text-[9px] text-[#94A3B8]">Weight {item.weight}</span>
+                  </div>
+                  <span className="text-[10px] text-[#94A3B8] block">{item.value}</span>
+                </div>
 
-            <div className="text-[#94A3B8]">
-              MA(5):{" "}
-              <span className="font-bold text-[#F1F5FC]">
-                ₹{prediction?.ma5?.toFixed(2) || "2,980.00"}
-              </span>{" "}
-              | MA(20):{" "}
-              <span className="font-bold text-[#F1F5FC]">
-                ₹{prediction?.ma20?.toFixed(2) || "2,945.00"}
-              </span>
-            </div>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getSentimentPill(
+                    item.sentiment
+                  )}`}
+                >
+                  {item.sentiment}
+                </span>
+              </div>
+            ))}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
