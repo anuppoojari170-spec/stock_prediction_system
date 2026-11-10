@@ -19,13 +19,16 @@ export const OrderEntryPanel: React.FC<OrderEntryPanelProps> = ({ ticker }) => {
     mode,
     virtualBalance,
     submitOrder,
+    liveTicks,
   } = useAppStore();
+
+  const liveTick = liveTicks[ticker.toUpperCase()];
 
   const [side, setSide] = useState<OrderSide>("BUY");
   const [product, setProduct] = useState<ProductType>("CNC");
   const [orderType, setOrderType] = useState<OrderType>("MARKET");
   const [qty, setQty] = useState<number>(10);
-  const [customPrice, setCustomPrice] = useState<number>(2984.50);
+  const [customPrice, setCustomPrice] = useState<number>(liveTick?.price ?? 2984.50);
   const [triggerPrice, setTriggerPrice] = useState<number>(2950.00);
 
   // Modal and feedback state
@@ -35,7 +38,7 @@ export const OrderEntryPanel: React.FC<OrderEntryPanelProps> = ({ ticker }) => {
     null
   );
 
-  const effectivePrice = orderType === "MARKET" ? 2984.50 : customPrice;
+  const effectivePrice = orderType === "MARKET" ? (liveTick?.price ?? 2984.50) : customPrice;
   const orderValue = qty * effectivePrice;
 
   // Indian statutory charges calculations
@@ -104,8 +107,24 @@ export const OrderEntryPanel: React.FC<OrderEntryPanelProps> = ({ ticker }) => {
         </div>
 
         <div className="text-right font-mono-numbers">
-          <div className="text-sm font-bold text-[#F1F5FC]">₹2,984.50</div>
-          <div className="text-[11px] font-semibold text-[#00C087]">+38.20 (+1.30%)</div>
+          <div
+            key={`${ticker}-${liveTick?.price}`}
+            className={`text-sm font-bold text-[#F1F5FC] px-1 py-0.5 rounded transition-colors ${
+              liveTick?.direction === "up" ? "flash-up text-[#00C087]" : liveTick?.direction === "down" ? "flash-down text-[#F04452]" : ""
+            }`}
+          >
+            ₹{(liveTick?.price ?? 2984.50).toFixed(2)}
+          </div>
+          <div
+            className={`text-[11px] font-semibold ${
+              (liveTick?.change ?? 38.20) >= 0 ? "text-[#00C087]" : "text-[#F04452]"
+            }`}
+          >
+            {(liveTick?.change ?? 38.20) >= 0 ? "+" : ""}
+            {(liveTick?.change ?? 38.20).toFixed(2)} (
+            {(liveTick?.change_pct ?? 1.30) >= 0 ? "+" : ""}
+            {(liveTick?.change_pct ?? 1.30).toFixed(2)}%)
+          </div>
         </div>
       </div>
 

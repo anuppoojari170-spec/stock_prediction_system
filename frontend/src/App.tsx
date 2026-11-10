@@ -17,6 +17,7 @@ import { AuthModal } from "./components/auth/AuthModal";
 import { useAppStore } from "./store/useAppStore";
 import { useAuthStore } from "./store/useAuthStore";
 import { authApi } from "./services/api";
+import { useMarketStream } from "./hooks/useMarketStream";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,7 +32,11 @@ const DashboardContent: React.FC = () => {
   const { activeTab, isSidebarCollapsed } = useAppStore();
   const { token, setUser } = useAuthStore();
 
+  // Initialize and run real-time sub-second market data stream
+  useMarketStream();
+
   // Restore authenticated user session on mount
+
   useEffect(() => {
     if (token) {
       authApi

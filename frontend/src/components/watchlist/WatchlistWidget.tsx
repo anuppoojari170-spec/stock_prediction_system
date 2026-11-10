@@ -17,6 +17,7 @@ export const WatchlistWidget: React.FC = () => {
     setOrderSide,
     toggleWatchlistPin,
     removeFromWatchlist,
+    liveTicks,
   } = useAppStore();
 
   const [activeCategory, setActiveCategory] = useState<string>("NIFTY 50");
@@ -73,7 +74,17 @@ export const WatchlistWidget: React.FC = () => {
       {/* Watchlist Items Scrollable List */}
       <div className="space-y-1 max-h-[320px] overflow-y-auto pr-1">
         {filteredItems.map((item) => {
-          const isUp = item.change_abs >= 0;
+          const live = liveTicks[item.ticker.toUpperCase()];
+          const price = live ? live.price : item.price;
+          const changePct = live ? live.change_pct : item.change_pct;
+          const isUp = (live ? live.change : item.change_abs) >= 0;
+          const flashClass = live
+            ? live.direction === "up"
+              ? "flash-up"
+              : live.direction === "down"
+              ? "flash-down"
+              : ""
+            : "";
           const isSelected = activeTicker === item.ticker;
 
           return (
@@ -140,8 +151,11 @@ export const WatchlistWidget: React.FC = () => {
 
               {/* Right: LTP & Percentage Change */}
               <div className="text-right font-mono-numbers">
-                <div className="text-xs font-semibold text-[#F1F5FC]">
-                  ₹{item.price.toFixed(2)}
+                <div
+                  key={`${item.ticker}-${price}`}
+                  className={`text-xs font-semibold px-1 py-0.5 rounded transition-colors ${flashClass} text-[#F1F5FC]`}
+                >
+                  ₹{price.toFixed(2)}
                 </div>
                 <div
                   className={`text-[10px] font-medium flex items-center justify-end space-x-0.5 ${
@@ -151,7 +165,7 @@ export const WatchlistWidget: React.FC = () => {
                   {isUp ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
                   <span>
                     {isUp ? "+" : ""}
-                    {item.change_pct.toFixed(2)}%
+                    {changePct.toFixed(2)}%
                   </span>
                 </div>
               </div>

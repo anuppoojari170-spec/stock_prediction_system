@@ -257,3 +257,42 @@ export interface NewsItem {
   summary: string;
   relatedTickers: string[];
 }
+
+export type WsConnectionStatus = "connected" | "connecting" | "disconnected";
+
+export interface TickerTick {
+  ticker: string;
+  price: number;
+  open: number;
+  high: number;
+  low: number;
+  change: number;
+  change_pct: number;
+  volume: number;
+  bid: number;
+  ask: number;
+  direction: "up" | "down" | "flat";
+  timestamp: number;
+}
+
+export interface IndexTick {
+  name: string;
+  value: number;
+  change: number;
+  change_pct: number;
+  direction: "up" | "down";
+  timestamp: number;
+}
+
+export interface DepthOrderLevel {
+  price: number;
+  qty: number;
+  orders: number;
+}
+
+export interface LiveDepthData {
+  ticker: string;
+  bids: DepthOrderLevel[];
+  asks: DepthOrderLevel[];
+}
+

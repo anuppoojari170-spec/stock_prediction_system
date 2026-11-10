@@ -1,13 +1,15 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
+from app.api.v1.endpoints.stream import websocket_market_stream
 from app.core.config import settings
 from app.db.session import init_db
+from app.services.market_streamer import market_streamer
 
 FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
 
@@ -16,8 +18,11 @@ FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 async def lifespan(app: FastAPI):
     # Startup: ensure tables and indexes exist
     init_db()
+    # Start high-frequency real-time market streaming engine
+    market_streamer.start()
     yield
-    # Shutdown logic if needed
+    # Shutdown logic
+    market_streamer.stop()
 
 
 app = FastAPI(
@@ -42,6 +47,13 @@ app.add_middleware(
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
+# Direct root WebSocket endpoint for market streaming
+@app.websocket("/ws/market/stream")
+@app.websocket("/ws/stream")
+async def root_market_stream(websocket: WebSocket):
+    await websocket_market_stream(websocket)
+
+
 @app.get("/api/health", tags=["Health"])
 def health():
     return {"status": "healthy"}
@@ -55,8 +67,8 @@ if os.path.exists(FRONTEND_DIST):
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
-        # Don't intercept API routes or documentation
-        if full_path.startswith("api/") or full_path in ("docs", "redoc", "openapi.json"):
+        # Don't intercept API routes, WebSockets or documentation
+        if full_path.startswith("api/") or full_path.startswith("ws/") or full_path in ("docs", "redoc", "openapi.json"):
             raise HTTPException(status_code=404)
         file_path = os.path.join(FRONTEND_DIST, full_path)
         if os.path.isfile(file_path):

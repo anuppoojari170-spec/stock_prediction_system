@@ -34,10 +34,15 @@ export const TopNavbar: React.FC = () => {
     setTheme,
     exchange,
     setExchange,
+    activeTicker,
     setActiveTicker,
     virtualBalance,
     setActiveTab,
+    wsStatus,
+    liveTicks,
   } = useAppStore();
+
+  const activeTick = liveTicks[activeTicker?.toUpperCase()];
 
   const { user, openAuthModal, logout } = useAuthStore();
 
@@ -129,6 +134,63 @@ export const TopNavbar: React.FC = () => {
           <span className="w-2 h-2 rounded-full bg-[#00C087]"></span>
           <span>{currentTime || "09:15:00 IST"}</span>
         </div>
+
+        {/* Real-Time WebSocket Market Stream Indicator */}
+        <div
+          className={`hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono border ${
+            wsStatus === "connected"
+              ? "bg-[#00C087]/10 border-[#00C087]/30 text-[#00C087]"
+              : wsStatus === "connecting"
+              ? "bg-[#F5B942]/10 border-[#F5B942]/30 text-[#F5B942]"
+              : "bg-[#F04452]/10 border-[#F04452]/30 text-[#F04452]"
+          }`}
+          title={
+            wsStatus === "connected"
+              ? "Connected to live sub-second market data stream"
+              : wsStatus === "connecting"
+              ? "Connecting to market WebSocket stream..."
+              : "Stream disconnected. Auto-reconnecting..."
+          }
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              wsStatus === "connected"
+                ? "bg-[#00C087] animate-pulse"
+                : wsStatus === "connecting"
+                ? "bg-[#F5B942] animate-ping"
+                : "bg-[#F04452]"
+            }`}
+          />
+          <span className="font-semibold uppercase tracking-wider text-[10px]">
+            {wsStatus === "connected" ? "LIVE STREAM" : wsStatus === "connecting" ? "SYNCING..." : "OFFLINE"}
+          </span>
+        </div>
+
+        {/* Active Loaded Stock Fast-Pill */}
+        {activeTick && (
+          <div className="hidden 2xl:flex items-center space-x-2 px-2.5 py-1 rounded bg-[#111C30] border border-[#26354B] text-xs">
+            <span className="font-bold text-[#F1F5FC]">{activeTick.ticker}</span>
+            <span
+              className={`font-mono-numbers font-semibold ${
+                activeTick.direction === "up"
+                  ? "text-[#00C087] flash-up"
+                  : activeTick.direction === "down"
+                  ? "text-[#F04452] flash-down"
+                  : "text-[#F1F5FC]"
+              }`}
+            >
+              ₹{activeTick.price.toFixed(2)}
+            </span>
+            <span
+              className={`font-mono-numbers text-[11px] ${
+                activeTick.change >= 0 ? "text-[#00C087]" : "text-[#F04452]"
+              }`}
+            >
+              {activeTick.change >= 0 ? "+" : ""}
+              {activeTick.change_pct.toFixed(2)}%
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Center: Global Search Bar */}

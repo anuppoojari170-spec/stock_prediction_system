@@ -3,7 +3,7 @@ import { Layers } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 
 export const PositionsView: React.FC = () => {
-  const { positions, squareOffPosition } = useAppStore();
+  const { positions, squareOffPosition, liveTicks } = useAppStore();
   const [filterTab, setFilterTab] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
 
   const filteredPositions = positions.filter((p) => {
@@ -72,6 +72,10 @@ export const PositionsView: React.FC = () => {
             <h3 className="font-heading font-bold text-base text-[#F1F5FC]">
               Trading Positions ({filteredPositions.length})
             </h3>
+            <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-[#00C087]/15 text-[#00C087] text-[10px] font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00C087] animate-pulse"></span>
+              <span>LIVE MTM</span>
+            </span>
           </div>
 
           {/* Filter Tabs */}
@@ -127,7 +131,18 @@ export const PositionsView: React.FC = () => {
                       ₹{pos.buyPrice.toFixed(2)}
                     </td>
                     <td className="py-2.5 px-3 text-right font-semibold text-[#F1F5FC]">
-                      ₹{pos.ltp.toFixed(2)}
+                      <span
+                        key={`${pos.id}-${pos.ltp}`}
+                        className={`px-1 py-0.5 rounded transition-colors ${
+                          liveTicks[pos.ticker.toUpperCase()]?.direction === "up"
+                            ? "flash-up text-[#00C087]"
+                            : liveTicks[pos.ticker.toUpperCase()]?.direction === "down"
+                            ? "flash-down text-[#F04452]"
+                            : ""
+                        }`}
+                      >
+                        ₹{pos.ltp.toFixed(2)}
+                      </span>
                     </td>
                     <td className="py-2.5 px-3 text-right">
                       {isOpen ? (

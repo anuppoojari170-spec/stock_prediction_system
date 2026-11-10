@@ -3,6 +3,8 @@ import {
   AppMode,
   AppTheme,
   ExchangeType,
+  IndexTick,
+  LiveDepthData,
   NavTab,
   OrderItem,
   OrderSide,
@@ -10,7 +12,9 @@ import {
   OrderType,
   PositionItem,
   ProductType,
+  TickerTick,
   WatchlistItem,
+  WsConnectionStatus,
 } from "../types";
 
 interface AppState {
@@ -42,7 +46,20 @@ interface AppState {
   watchlistCategory: "NIFTY 50" | "Banking" | "IT" | "My Watchlist";
   watchlists: Record<string, WatchlistItem[]>;
 
+  // Real-time market streaming state
+  wsStatus: WsConnectionStatus;
+  liveTicks: Record<string, TickerTick>;
+  liveIndices: Record<string, IndexTick>;
+  liveDepth: Record<string, LiveDepthData>;
+  lastTickTimestamp: number;
+
   // Actions
+  setWsStatus: (status: WsConnectionStatus) => void;
+  applySnapshot: (snapshot: { stocks?: TickerTick[]; indices?: IndexTick[] }) => void;
+  applyTick: (tick: TickerTick) => void;
+  applyIndexTick: (indexTick: IndexTick) => void;
+  applyDepth: (depth: LiveDepthData) => void;
+
   setMode: (mode: AppMode) => void;
   setTheme: (theme: AppTheme) => void;
   setActiveTab: (tab: NavTab) => void;
@@ -212,6 +229,117 @@ export const useAppStore = create<AppState>((set, get) => {
 
     watchlistCategory: "NIFTY 50",
     watchlists: defaultWatchlists,
+
+    // Real-time market streaming state
+    wsStatus: "disconnected",
+    liveTicks: {},
+    liveIndices: {},
+    liveDepth: {},
+    lastTickTimestamp: Date.now(),
+
+    setWsStatus: (wsStatus) => set({ wsStatus }),
+
+    applySnapshot: (snapshot) => {
+      set((state) => {
+        const nextTicks = { ...state.liveTicks };
+        const nextIndices = { ...state.liveIndices };
+
+        if (snapshot.stocks) {
+          for (const s of snapshot.stocks) {
+            nextTicks[s.ticker.toUpperCase()] = s;
+          }
+        }
+        if (snapshot.indices) {
+          for (const idx of snapshot.indices) {
+            nextIndices[idx.name] = idx;
+          }
+        }
+
+        return {
+          liveTicks: nextTicks,
+          liveIndices: nextIndices,
+          lastTickTimestamp: Date.now(),
+        };
+      });
+    },
+
+    applyTick: (tick) => {
+      set((state) => {
+        const sym = tick.ticker.toUpperCase();
+        const nextTicks = { ...state.liveTicks, [sym]: tick };
+
+        // 1. Live Mark-to-Market (MTM) calculations for open positions
+        let positionsChanged = false;
+        const updatedPositions = state.positions.map((pos) => {
+          if (pos.ticker.toUpperCase() === sym && pos.status === "OPEN") {
+            positionsChanged = true;
+            const ltp = tick.price;
+            const unrealizedPnl = Math.round((ltp - pos.buyPrice) * pos.quantity * 100) / 100;
+            const netPnl = Math.round((pos.realizedPnl + unrealizedPnl) * 100) / 100;
+            return {
+              ...pos,
+              ltp,
+              unrealizedPnl,
+              netPnl,
+            };
+          }
+          return pos;
+        });
+
+        // 2. Dynamically update watchlist prices & sparklines
+        const updatedWatchlists = { ...state.watchlists };
+        let watchlistChanged = false;
+        for (const cat of Object.keys(updatedWatchlists)) {
+          updatedWatchlists[cat] = updatedWatchlists[cat].map((item) => {
+            if (item.ticker.toUpperCase() === sym) {
+              watchlistChanged = true;
+              const sparkline = item.sparkline
+                ? [...item.sparkline.slice(-14), tick.price]
+                : [tick.price];
+              return {
+                ...item,
+                price: tick.price,
+                change_abs: tick.change,
+                change_pct: tick.change_pct,
+                sparkline,
+              };
+            }
+            return item;
+          });
+        }
+
+        // 3. Keep market order price in sync with active ticker LTP
+        const shouldSyncOrderPrice =
+          state.activeTicker.toUpperCase() === sym && state.orderType === "MARKET";
+
+        return {
+          liveTicks: nextTicks,
+          positions: positionsChanged ? updatedPositions : state.positions,
+          watchlists: watchlistChanged ? updatedWatchlists : state.watchlists,
+          orderPrice: shouldSyncOrderPrice ? tick.price : state.orderPrice,
+          lastTickTimestamp: Date.now(),
+        };
+      });
+    },
+
+    applyIndexTick: (indexTick) => {
+      set((state) => ({
+        liveIndices: {
+          ...state.liveIndices,
+          [indexTick.name]: indexTick,
+        },
+        lastTickTimestamp: Date.now(),
+      }));
+    },
+
+    applyDepth: (depth) => {
+      set((state) => ({
+        liveDepth: {
+          ...state.liveDepth,
+          [depth.ticker.toUpperCase()]: depth,
+        },
+      }));
+    },
 
     setMode: (mode) => {
       localStorage.setItem("nexus_mode", mode);

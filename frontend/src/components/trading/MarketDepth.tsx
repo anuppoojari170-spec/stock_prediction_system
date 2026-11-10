@@ -1,21 +1,41 @@
 import React, { useMemo } from "react";
 import { MarketDepthLevel } from "../../types";
+import { useAppStore } from "../../store/useAppStore";
 
 interface MarketDepthProps {
   ticker: string;
 }
 
 export const MarketDepth: React.FC<MarketDepthProps> = ({ ticker }) => {
-  // Generate realistic 5-level Indian stock depth based on ticker
+  const streamDepth = useAppStore((state) => state.liveDepth[ticker.toUpperCase()]);
+  const wsStatus = useAppStore((state) => state.wsStatus);
+
+  // Use live streaming L2 order book depth if available, else responsive fallback
   const depthData: MarketDepthLevel[] = useMemo(() => {
+    if (streamDepth && streamDepth.bids && streamDepth.bids.length >= 5 && streamDepth.asks && streamDepth.asks.length >= 5) {
+      return streamDepth.bids.slice(0, 5).map((bid, idx) => {
+        const ask = streamDepth.asks[idx];
+        return {
+          bidOrders: bid.orders,
+          bidQty: bid.qty,
+          bidPrice: bid.price,
+          askPrice: ask ? ask.price : bid.price + 0.5,
+          askQty: ask ? ask.qty : 1200,
+          askOrders: ask ? ask.orders : 10,
+        };
+      });
+    }
+
+    // Reference fallback based on stock price
+    const base = ticker.toUpperCase() === "RELIANCE" ? 2984.50 : 1500.0;
     return [
-      { bidOrders: 12, bidQty: 1450, bidPrice: 2984.10, askPrice: 2984.50, askQty: 1820, askOrders: 8 },
-      { bidOrders: 24, bidQty: 3200, bidPrice: 2983.80, askPrice: 2984.90, askQty: 2450, askOrders: 15 },
-      { bidOrders: 18, bidQty: 2100, bidPrice: 2983.50, askPrice: 2985.20, askQty: 3900, askOrders: 21 },
-      { bidOrders: 31, bidQty: 4850, bidPrice: 2983.00, askPrice: 2985.75, askQty: 1950, askOrders: 11 },
-      { bidOrders: 42, bidQty: 6200, bidPrice: 2982.50, askPrice: 2986.10, askQty: 5400, askOrders: 29 },
+      { bidOrders: 12, bidQty: 1450, bidPrice: base - 0.40, askPrice: base, askQty: 1820, askOrders: 8 },
+      { bidOrders: 24, bidQty: 3200, bidPrice: base - 0.70, askPrice: base + 0.40, askQty: 2450, askOrders: 15 },
+      { bidOrders: 18, bidQty: 2100, bidPrice: base - 1.00, askPrice: base + 0.70, askQty: 3900, askOrders: 21 },
+      { bidOrders: 31, bidQty: 4850, bidPrice: base - 1.50, askPrice: base + 1.25, askQty: 1950, askOrders: 11 },
+      { bidOrders: 42, bidQty: 6200, bidPrice: base - 2.00, askPrice: base + 1.60, askQty: 5400, askOrders: 29 },
     ];
-  }, [ticker]);
+  }, [ticker, streamDepth]);
 
   const totalBidQty = depthData.reduce((acc, row) => acc + row.bidQty, 0);
   const totalAskQty = depthData.reduce((acc, row) => acc + row.askQty, 0);
@@ -37,9 +57,17 @@ export const MarketDepth: React.FC<MarketDepthProps> = ({ ticker }) => {
           </span>
           <span className="text-[10px] text-[#94A3B8] font-mono">5-Level Book</span>
         </div>
-        <span className="text-[10px] text-[#00C087] font-mono flex items-center space-x-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#00C087] animate-pulse"></span>
-          <span>Live Feed</span>
+        <span
+          className={`text-[10px] font-mono flex items-center space-x-1 ${
+            wsStatus === "connected" ? "text-[#00C087]" : "text-[#94A3B8]"
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              wsStatus === "connected" ? "bg-[#00C087] animate-pulse" : "bg-[#94A3B8]"
+            }`}
+          ></span>
+          <span>{wsStatus === "connected" ? "Live L2 Feed" : "Depth Book"}</span>
         </span>
       </div>
 

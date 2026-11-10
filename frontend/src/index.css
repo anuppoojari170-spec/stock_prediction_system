@@ -100,6 +100,38 @@ body {
   animation: tickerSlide 40s linear infinite;
 }
 
+/* Sub-second WebSocket Real-Time Tick Flashes */
+@keyframes tickGreenPulse {
+  0% {
+    background-color: rgba(0, 192, 135, 0.28);
+    color: #00C087;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes tickRedPulse {
+  0% {
+    background-color: rgba(240, 68, 82, 0.28);
+    color: #F04452;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.flash-up {
+  animation: tickGreenPulse 0.75s ease-out;
+  border-radius: 4px;
+}
+
+.flash-down {
+  animation: tickRedPulse 0.75s ease-out;
+  border-radius: 4px;
+}
+
+
 .ticker-track:hover {
   animation-play-state: paused;
 }

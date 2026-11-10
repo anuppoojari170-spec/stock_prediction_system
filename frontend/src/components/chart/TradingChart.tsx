@@ -76,6 +76,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
   const [showVolume, setShowVolume] = useState(true);
   const [candlesData, setCandlesData] = useState<ChartCandle[]>([]);
 
+  // Real-time market tick from WebSocket
+  const liveTick = useAppStore((state) => state.liveTicks[ticker.toUpperCase()]);
+
   // Base price lookup based on ticker
   const basePrice = useMemo(() => {
     switch (ticker.toUpperCase()) {
@@ -292,11 +295,40 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
     };
   }, [candlesData, chartStyle, showSMA, showEMA, showVolume, theme]);
 
+  // Dynamically update the active bar on the Lightweight Chart upon each incoming sub-second tick
+  useEffect(() => {
+    if (!liveTick || !mainSeriesRef.current || candlesData.length === 0) return;
+    const lastCandle = candlesData[candlesData.length - 1];
+    if (!lastCandle) return;
+
+    const newHigh = Math.max(lastCandle.high, liveTick.price);
+    const newLow = Math.min(lastCandle.low, liveTick.price);
+
+    try {
+      if (chartStyle === "candles") {
+        mainSeriesRef.current.update({
+          time: lastCandle.time as any,
+          open: lastCandle.open,
+          high: newHigh,
+          low: newLow,
+          close: liveTick.price,
+        });
+      } else {
+        mainSeriesRef.current.update({
+          time: lastCandle.time as any,
+          value: liveTick.price,
+        });
+      }
+    } catch {
+      // Lightweight chart boundary catch
+    }
+  }, [liveTick, chartStyle, candlesData]);
+
   const latestCandle = candlesData[candlesData.length - 1];
   const prevCandle = candlesData[candlesData.length - 2];
-  const currentPrice = latestCandle ? latestCandle.close : basePrice;
-  const dayChange = prevCandle ? currentPrice - prevCandle.close : 24.5;
-  const dayChangePct = prevCandle ? (dayChange / prevCandle.close) * 100 : 0.85;
+  const currentPrice = liveTick ? liveTick.price : (latestCandle ? latestCandle.close : basePrice);
+  const dayChange = liveTick ? liveTick.change : (prevCandle ? currentPrice - prevCandle.close : 24.5);
+  const dayChangePct = liveTick ? liveTick.change_pct : (prevCandle ? (dayChange / prevCandle.close) * 100 : 0.85);
   const isUp = dayChange >= 0;
 
   return (
@@ -313,6 +345,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
               <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#386BFF]/20 text-[#386BFF] uppercase">
                 NSE
               </span>
+              <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#00C087]/15 text-[#00C087] font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00C087] animate-pulse"></span>
+                <span>REALTIME</span>
+              </span>
             </div>
             <span className="text-[11px] text-[#94A3B8]">
               {ticker === "RELIANCE" ? "Reliance Industries Ltd" : `${ticker} Equity`}
@@ -322,7 +358,18 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
           <div className="h-6 w-px bg-[#26354B]"></div>
 
           <div className="flex items-baseline space-x-2 font-mono-numbers">
-            <span className="text-lg font-bold text-[#F1F5FC]">
+            <span
+              key={`${ticker}-${currentPrice}`}
+              className={`text-lg font-bold px-1.5 py-0.5 rounded transition-colors ${
+                liveTick
+                  ? liveTick.direction === "up"
+                    ? "flash-up text-[#00C087]"
+                    : liveTick.direction === "down"
+                    ? "flash-down text-[#F04452]"
+                    : "text-[#F1F5FC]"
+                  : "text-[#F1F5FC]"
+              }`}
+            >
               ₹{currentPrice.toFixed(2)}
             </span>
             <span
