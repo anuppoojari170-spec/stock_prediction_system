@@ -296,3 +296,78 @@ export interface LiveDepthData {
   asks: DepthOrderLevel[];
 }
 
+export type StrategyType =
+  | "AI_ENSEMBLE"
+  | "RSI_MEAN_REVERSION"
+  | "MACD_CROSSOVER"
+  | "BOLLINGER_BANDS"
+  | "EMA_CROSSOVER";
+
+export interface BacktestRequest {
+  ticker: string;
+  strategy: StrategyType;
+  period: string;
+  initial_capital?: number;
+  slippage_pct?: number;
+  brokerage_per_trade?: number;
+}
+
+export interface TradeLogItem {
+  trade_id: number;
+  entry_date: string;
+  exit_date: string;
+  side: string;
+  entry_price: number;
+  exit_price: number;
+  shares: number;
+  pnl: number;
+  return_pct: number;
+  holding_days: number;
+  exit_reason: string;
+}
+
+export interface EquityPoint {
+  date: string;
+  strategy_value: number;
+  benchmark_value: number;
+  drawdown_pct: number;
+}
+
+export interface BacktestMetrics {
+  initial_capital: number;
+  ending_capital: number;
+  net_profit: number;
+  total_return_pct: number;
+  benchmark_return_pct: number;
+  alpha_pct: number;
+  cagr_pct: number;
+  win_rate_pct: number;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  profit_factor: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  max_drawdown_pct: number;
+  avg_trade_pnl: number;
+  avg_win: number;
+  avg_loss: number;
+  risk_reward_realized: number;
+}
+
+export interface MonthlyReturn {
+  month: string;
+  return_pct: number;
+}
+
+export interface BacktestResponse {
+  ticker: string;
+  strategy_name: string;
+  period: string;
+  metrics: BacktestMetrics;
+  equity_curve: EquityPoint[];
+  trade_log: TradeLogItem[];
+  monthly_returns: MonthlyReturn[];
+}
+
+

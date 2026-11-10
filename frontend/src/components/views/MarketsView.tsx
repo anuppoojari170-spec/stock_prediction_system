@@ -308,13 +308,15 @@ export const MarketsView: React.FC = () => {
               {details.description}
             </p>
           </div>
+
+          {/* 5-Level Market Depth (L2) Order Book */}
+          <MarketDepth ticker={activeTicker} />
         </div>
 
-        {/* Right Column: AI Sentiment Engine + Order Placement Panel + Market Depth */}
+        {/* Right Column: AI Sentiment Engine + Order Placement Panel */}
         <div className="lg:col-span-4 space-y-4">
           <SentimentGauge ticker={activeTicker} />
           <OrderEntryPanel ticker={activeTicker} />
-          <MarketDepth ticker={activeTicker} />
         </div>
       </div>
     </div>

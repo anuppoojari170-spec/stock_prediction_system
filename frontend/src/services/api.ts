@@ -11,6 +11,8 @@ import {
   Transaction,
   User,
   WatchlistItem,
+  BacktestRequest,
+  BacktestResponse,
 } from "../types";
 
 const api = axios.create({
@@ -117,6 +119,14 @@ export const watchlistApi = {
   },
   togglePin: async (ticker: string) => {
     const res = await api.post(`/watchlist/${ticker}/pin`);
+    return res.data;
+  },
+};
+
+// --- Algorithmic Backtesting Endpoints ---
+export const backtestApi = {
+  run: async (req: BacktestRequest): Promise<BacktestResponse> => {
+    const res = await api.post<BacktestResponse>("/backtest/run", req);
     return res.data;
   },
 };

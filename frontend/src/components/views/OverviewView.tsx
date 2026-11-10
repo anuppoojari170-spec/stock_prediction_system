@@ -38,7 +38,7 @@ export const OverviewView: React.FC = () => {
 
       {/* Main Trading Terminal Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left 8 Columns: Main Chart + Market Depth + Recent Orders */}
+        {/* Left 8 Columns: Main Chart + Market Depth & Recent Orders + Watchlist Table */}
         <div className="lg:col-span-8 space-y-4">
           <TradingChart ticker={activeTicker} />
 
@@ -46,18 +46,18 @@ export const OverviewView: React.FC = () => {
             <MarketDepth ticker={activeTicker} />
             <RecentOrdersWidget />
           </div>
+
+          {/* Watchlist Table (Moved below Market Depth) */}
+          <WatchlistWidget />
         </div>
 
-        {/* Right 4 Columns: AI Sentiment Engine + Order Entry Panel + Watchlist */}
+        {/* Right 4 Columns: AI Sentiment Engine + Order Entry Panel */}
         <div className="lg:col-span-4 space-y-4">
           {/* Core AI Intelligence Sentiment & Prediction Gauge */}
           <SentimentGauge ticker={activeTicker} />
 
           {/* Execution Order Entry Panel */}
           <OrderEntryPanel ticker={activeTicker} />
-
-          {/* Quick Watchlist */}
-          <WatchlistWidget />
         </div>
       </div>
     </div>
