@@ -10,8 +10,39 @@ On top of that, this module adds:
   - an aggregate market sentiment score derived from individual signals
 """
 
+import time
+from threading import Lock
 import yfinance as yf
 import pandas as pd
+
+
+class TTLCache:
+    """Thread-safe in-memory cache with time-to-live expiration."""
+    def __init__(self, default_ttl=60):
+        self.default_ttl = default_ttl
+        self.cache = {}
+        self.lock = Lock()
+
+    def get(self, key):
+        with self.lock:
+            if key in self.cache:
+                val, expiry = self.cache[key]
+                if time.time() < expiry:
+                    return val
+                del self.cache[key]
+            return None
+
+    def set(self, key, value, ttl=None):
+        with self.lock:
+            expiry = time.time() + (ttl if ttl is not None else self.default_ttl)
+            self.cache[key] = (value, expiry)
+
+    def clear(self):
+        with self.lock:
+            self.cache.clear()
+
+
+market_cache = TTLCache(default_ttl=60)
 
 # Universe of stocks used for "Top Gainers", "Top Losers" and sentiment.
 # Kept small and well-known so demo runs stay fast and reliable.
@@ -30,13 +61,24 @@ MARKET_INDICES = {
 
 
 def get_stock_data(ticker, period="6mo"):
-    stock = yf.Ticker(ticker + ".NS")
-    df = stock.history(period=period)
+    ticker = ticker.strip().upper()
+    cache_key = f"stock_data:{ticker}:{period}"
+    cached = market_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
-    if df.empty:
+    try:
+        stock = yf.Ticker(ticker + ".NS")
+        df = stock.history(period=period)
+
+        if df.empty:
+            return None
+
+        result = df.reset_index()
+        market_cache.set(cache_key, result, ttl=45)
+        return result
+    except Exception:
         return None
-
-    return df.reset_index()
 
 
 def predict_stock(ticker):
@@ -110,6 +152,10 @@ def _risk_level(df, window=20):
 
 def get_market_overview():
     """Fetch current value and % change for tracked indices."""
+    cached = market_cache.get("market_overview")
+    if cached is not None:
+        return cached
+
     overview = []
     for name, symbol in MARKET_INDICES.items():
         try:
@@ -132,51 +178,93 @@ def get_market_overview():
         except Exception:
             overview.append({"name": name, "error": "Unavailable"})
 
+    market_cache.set("market_overview", overview, ttl=60)
     return overview
 
 
 def get_movers(limit=5):
     """Compute top gainers and losers across the tracked stock universe."""
-    movers = []
+    cache_key = f"movers:{limit}"
+    cached = market_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
-    for ticker in TRACKED_UNIVERSE:
-        try:
-            stock = yf.Ticker(ticker + ".NS")
-            df = stock.history(period="5d")
-            if df.empty or len(df) < 2:
+    movers = []
+    # Fast parallel batch download for all 15 symbols
+    symbols = [f"{ticker}.NS" for ticker in TRACKED_UNIVERSE]
+    try:
+        data = yf.download(
+            tickers=symbols,
+            period="5d",
+            interval="1d",
+            group_by="ticker",
+            threads=True,
+            progress=False,
+        )
+        for ticker in TRACKED_UNIVERSE:
+            try:
+                sym = f"{ticker}.NS"
+                sub = None
+                if isinstance(data.columns, pd.MultiIndex):
+                    if sym in data.columns.levels[0]:
+                        sub = data[sym]["Close"].dropna()
+                elif sym in data:
+                    sub = data[sym]["Close"].dropna()
+
+                if sub is not None and len(sub) >= 2:
+                    latest = float(sub.iloc[-1])
+                    prev = float(sub.iloc[-2])
+                    change_pct = ((latest - prev) / prev) * 100 if prev else 0
+                    movers.append({
+                        "ticker": ticker,
+                        "price": round(latest, 2),
+                        "change_pct": round(change_pct, 2),
+                    })
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # Fallback to individual history if batch download returned empty
+    if len(movers) < 3:
+        for ticker in TRACKED_UNIVERSE[:6]:
+            try:
+                stock = yf.Ticker(ticker + ".NS")
+                df = stock.history(period="5d")
+                if not df.empty and len(df) >= 2:
+                    latest = float(df["Close"].iloc[-1])
+                    prev = float(df["Close"].iloc[-2])
+                    change_pct = ((latest - prev) / prev) * 100 if prev else 0
+                    movers.append({
+                        "ticker": ticker,
+                        "price": round(latest, 2),
+                        "change_pct": round(change_pct, 2),
+                    })
+            except Exception:
                 continue
 
-            latest = float(df["Close"].iloc[-1])
-            prev = float(df["Close"].iloc[-2])
-            change_pct = ((latest - prev) / prev) * 100 if prev else 0
-
-            movers.append({
-                "ticker": ticker,
-                "price": round(latest, 2),
-                "change_pct": round(change_pct, 2),
-            })
-        except Exception:
-            continue
-
     movers.sort(key=lambda m: m["change_pct"], reverse=True)
-
     gainers = [m for m in movers if m["change_pct"] >= 0][:limit]
-    losers = sorted(
-        [m for m in movers if m["change_pct"] < 0],
-        key=lambda m: m["change_pct"]
-    )[:limit]
+    losers = sorted([m for m in movers if m["change_pct"] < 0], key=lambda m: m["change_pct"])[:limit]
 
-    return {"gainers": gainers, "losers": losers}
+    result = {"gainers": gainers, "losers": losers}
+    market_cache.set(cache_key, result, ttl=60)
+    return result
 
 
 def get_market_sentiment(sample_tickers=None):
     """
     Derive an overall market sentiment (Bullish / Neutral / Bearish) by
     running the existing prediction logic across a basket of stocks and
-    aggregating their signals. No external AI APIs are used.
+    aggregating their signals.
     """
     if sample_tickers is None:
-        sample_tickers = TRACKED_UNIVERSE[:10]
+        sample_tickers = TRACKED_UNIVERSE[:8]
+
+    cache_key = f"sentiment:{','.join(sample_tickers)}"
+    cached = market_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     buy_count = 0
     sell_count = 0
@@ -209,10 +297,12 @@ def get_market_sentiment(sample_tickers=None):
     else:
         label = "NEUTRAL"
 
-    return {
+    result = {
         "label": label,
         "score": score,
         "buy": buy_count,
         "sell": sell_count,
         "hold": hold_count,
     }
+    market_cache.set(cache_key, result, ttl=60)
+    return result

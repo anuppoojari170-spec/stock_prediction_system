@@ -8,6 +8,7 @@ yfinance) instead of a hardcoded stub price.
 
 import yfinance as yf
 from database import get_connection, log_activity
+from predictor import market_cache
 
 
 class TradingError(Exception):
@@ -20,11 +21,17 @@ class TradingError(Exception):
 
 def get_live_price(ticker):
     """Fetch the latest traded price for an NSE-listed ticker."""
+    ticker = ticker.strip().upper()
+    # Check cache first
+    for period in ("1d", "5d", "6mo"):
+        cached = market_cache.get(f"stock_data:{ticker}:{period}")
+        if cached is not None and not cached.empty:
+            return round(float(cached["Close"].iloc[-1]), 2)
+
     try:
-        stock = yf.Ticker(ticker.upper() + ".NS")
+        stock = yf.Ticker(ticker + ".NS")
         df = stock.history(period="1d")
         if df.empty:
-            # Fall back to a slightly longer window in case "1d" has no bars
             df = stock.history(period="5d")
         if df.empty:
             return None
@@ -56,54 +63,51 @@ def buy_stock(ticker, quantity):
     cost = round(quantity * price, 2)
 
     conn = get_connection()
-    cur = conn.cursor()
+    try:
+        with conn:
+            cur = conn.cursor()
 
-    cur.execute("SELECT balance FROM account WHERE id=1")
-    balance = cur.fetchone()["balance"]
+            # Atomic balance deduction with balance check in SQL to eliminate race conditions
+            cur.execute(
+                "UPDATE account SET balance = balance - ? WHERE id=1 AND balance >= ?",
+                (cost, cost)
+            )
+            if cur.rowcount == 0:
+                raise TradingError("Insufficient balance for this purchase")
 
-    if cost > balance:
+            cur.execute("SELECT shares, invested_amount FROM portfolio WHERE ticker=?", (ticker,))
+            row = cur.fetchone()
+
+            if row:
+                new_shares = row["shares"] + quantity
+                new_invested = (row["invested_amount"] or 0) + cost
+                new_avg = round(new_invested / new_shares, 2) if new_shares else 0
+                cur.execute(
+                    """
+                    UPDATE portfolio
+                    SET shares=?, avg_price=?, invested_amount=?
+                    WHERE ticker=?
+                    """,
+                    (new_shares, new_avg, new_invested, ticker)
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO portfolio (ticker, shares, avg_price, invested_amount)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (ticker, quantity, price, cost)
+                )
+
+            cur.execute(
+                """
+                INSERT INTO transactions (ticker, type, quantity, price, total)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (ticker, "BUY", quantity, price, cost)
+            )
+    finally:
         conn.close()
-        raise TradingError("Insufficient balance for this purchase")
-
-    cur.execute("SELECT shares, invested_amount FROM portfolio WHERE ticker=?", (ticker,))
-    row = cur.fetchone()
-
-    if row:
-        new_shares = row["shares"] + quantity
-        new_invested = (row["invested_amount"] or 0) + cost
-        new_avg = round(new_invested / new_shares, 2) if new_shares else 0
-        cur.execute(
-            """
-            UPDATE portfolio
-            SET shares=?, avg_price=?, invested_amount=?
-            WHERE ticker=?
-            """,
-            (new_shares, new_avg, new_invested, ticker)
-        )
-    else:
-        cur.execute(
-            """
-            INSERT INTO portfolio (ticker, shares, avg_price, invested_amount)
-            VALUES (?, ?, ?, ?)
-            """,
-            (ticker, quantity, price, cost)
-        )
-
-    cur.execute(
-        "UPDATE account SET balance = balance - ? WHERE id=1",
-        (cost,)
-    )
-
-    cur.execute(
-        """
-        INSERT INTO transactions (ticker, type, quantity, price, total)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (ticker, "BUY", quantity, price, cost)
-    )
-
-    conn.commit()
-    conn.close()
 
     log_activity(f"Bought {quantity} shares of {ticker} at \u20b9{price}", "trade")
 
@@ -124,58 +128,55 @@ def sell_stock(ticker, quantity):
         raise TradingError("Quantity must be greater than zero")
 
     conn = get_connection()
-    cur = conn.cursor()
+    try:
+        with conn:
+            cur = conn.cursor()
 
-    cur.execute("SELECT shares, invested_amount FROM portfolio WHERE ticker=?", (ticker,))
-    row = cur.fetchone()
+            cur.execute("SELECT shares, invested_amount FROM portfolio WHERE ticker=?", (ticker,))
+            row = cur.fetchone()
 
-    if not row:
+            if not row:
+                raise TradingError(f"{ticker} not found in portfolio")
+
+            current_shares = row["shares"]
+            if quantity > current_shares:
+                raise TradingError("Not enough shares to sell")
+
+            price = get_live_price(ticker)
+            if price is None:
+                raise TradingError(f"Could not fetch live price for {ticker}. Try again shortly.")
+
+            value = round(quantity * price, 2)
+            new_shares = current_shares - quantity
+
+            if new_shares == 0:
+                cur.execute("DELETE FROM portfolio WHERE ticker=?", (ticker,))
+            else:
+                avg_price = (row["invested_amount"] or 0) / current_shares if current_shares else 0
+                new_invested = avg_price * new_shares
+                cur.execute(
+                    """
+                    UPDATE portfolio
+                    SET shares=?, invested_amount=?
+                    WHERE ticker=?
+                    """,
+                    (new_shares, new_invested, ticker)
+                )
+
+            cur.execute(
+                "UPDATE account SET balance = balance + ? WHERE id=1",
+                (value,)
+            )
+
+            cur.execute(
+                """
+                INSERT INTO transactions (ticker, type, quantity, price, total)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (ticker, "SELL", quantity, price, value)
+            )
+    finally:
         conn.close()
-        raise TradingError(f"{ticker} not found in portfolio")
-
-    current_shares = row["shares"]
-
-    if quantity > current_shares:
-        conn.close()
-        raise TradingError("Not enough shares to sell")
-
-    price = get_live_price(ticker)
-    if price is None:
-        conn.close()
-        raise TradingError(f"Could not fetch live price for {ticker}. Try again shortly.")
-
-    value = round(quantity * price, 2)
-    new_shares = current_shares - quantity
-
-    if new_shares == 0:
-        cur.execute("DELETE FROM portfolio WHERE ticker=?", (ticker,))
-    else:
-        avg_price = (row["invested_amount"] or 0) / current_shares if current_shares else 0
-        new_invested = avg_price * new_shares
-        cur.execute(
-            """
-            UPDATE portfolio
-            SET shares=?, invested_amount=?
-            WHERE ticker=?
-            """,
-            (new_shares, new_invested, ticker)
-        )
-
-    cur.execute(
-        "UPDATE account SET balance = balance + ? WHERE id=1",
-        (value,)
-    )
-
-    cur.execute(
-        """
-        INSERT INTO transactions (ticker, type, quantity, price, total)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (ticker, "SELL", quantity, price, value)
-    )
-
-    conn.commit()
-    conn.close()
 
     log_activity(f"Sold {quantity} shares of {ticker} at \u20b9{price}", "trade")
 
