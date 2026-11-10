@@ -1,11 +1,16 @@
-flask==3.1.3
-flask-cors==6.0.1
-pandas==2.3.3
-numpy==2.0.2
-scikit-learn==1.6.1
-yfinance==0.2.65
-matplotlib==3.9.4
-joblib==1.5.2
-xgboost==2.1.4
-ta==0.11.0
-requests==2.32.5
+# TradePilot AI — Modern Dependencies
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+sqlalchemy>=2.0.36
+psycopg2-binary>=2.9.9
+pyjwt>=2.9.0
+bcrypt>=4.2.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.12
+yfinance>=0.2.48
+pandas>=2.2.0
+numpy>=2.0.0
+requests>=2.32.0
+python-dotenv>=1.0.1

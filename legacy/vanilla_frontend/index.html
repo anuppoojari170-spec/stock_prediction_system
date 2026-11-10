@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradePilot AI — Stock Trading Platform</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ===================== SIDEBAR ===================== -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+        <span class="brand-mark">TP</span>
+        <span class="brand-name">TradePilot<span class="brand-accent">AI</span></span>
+    </div>
+
+    <nav class="sidebar-nav">
+        <a href="#overview" class="nav-link active" data-target="overview">
+            <span class="nav-icon">◧</span><span>Overview</span>
+        </a>
+        <a href="#predict" class="nav-link" data-target="predict">
+            <span class="nav-icon">◎</span><span>Prediction</span>
+        </a>
+        <a href="#chart" class="nav-link" data-target="chart">
+            <span class="nav-icon">▤</span><span>Charts</span>
+        </a>
+        <a href="#trade" class="nav-link" data-target="trade">
+            <span class="nav-icon">⇄</span><span>Trade</span>
+        </a>
+        <a href="#portfolio" class="nav-link" data-target="portfolio">
+            <span class="nav-icon">◫</span><span>Portfolio</span>
+        </a>
+        <a href="#history" class="nav-link" data-target="history">
+            <span class="nav-icon">≡</span><span>History</span>
+        </a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <div class="sidebar-balance-label">Available Balance</div>
+        <div class="sidebar-balance-value mono" id="sidebarBalance">₹0.00</div>
+    </div>
+</aside>
+
+<!-- ===================== MAIN ===================== -->
+<div class="main-wrap">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+        <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle menu">☰</button>
+
+        <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input type="text" id="globalSearch" class="search-input" placeholder="Search stocks — e.g. TCS, INFY, RELIANCE" autocomplete="off">
+            <div class="search-suggestions" id="searchSuggestions"></div>
+        </div>
+
+        <div class="topbar-right">
+            <div class="topbar-pill">
+                <span class="pill-label">Balance</span>
+                <span class="pill-value mono" id="topbarBalance">₹0.00</span>
+            </div>
+            <div class="topbar-pill pnl-pill" id="topbarPnlPill">
+                <span class="pill-label">Today's P&amp;L</span>
+                <span class="pill-value mono" id="topbarPnl">₹0.00</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="content">
+
+        <!-- ============ MARKET OVERVIEW ============ -->
+        <section class="panel-section" id="overview">
+            <div class="section-head">
+                <h2>Market Overview</h2>
+                <span class="section-sub mono" id="marketClock">—</span>
+            </div>
+
+            <div class="index-grid" id="indexGrid">
+                <!-- index cards injected here -->
+                <div class="index-card skeleton"></div>
+                <div class="index-card skeleton"></div>
+                <div class="index-card skeleton"></div>
+            </div>
+
+            <div class="overview-row">
+                <div class="sentiment-card glass-card">
+                    <div class="card-title">Market Sentiment</div>
+                    <div class="sentiment-gauge-wrap">
+                        <svg viewBox="0 0 200 110" class="sentiment-gauge">
+                            <path d="M 15 100 A 85 85 0 0 1 185 100" class="gauge-track"></path>
+                            <path d="M 15 100 A 85 85 0 0 1 185 100" class="gauge-fill" id="gaugeFill"></path>
+                            <line x1="100" y1="100" x2="100" y2="30" class="gauge-needle" id="gaugeNeedle"></line>
+                            <circle cx="100" cy="100" r="6" class="gauge-pivot"></circle>
+                        </svg>
+                        <div class="gauge-readout">
+                            <div class="gauge-label" id="sentimentLabel">NEUTRAL</div>
+                            <div class="gauge-score mono" id="sentimentScore">50</div>
+                        </div>
+                    </div>
+                    <div class="sentiment-breakdown" id="sentimentBreakdown"></div>
+                </div>
+
+                <div class="dashboard-cards">
+                    <div class="metric-card glass-card" data-accent="emerald">
+                        <div class="metric-icon">₹</div>
+                        <div class="metric-body">
+                            <div class="metric-label">Portfolio Balance</div>
+                            <div class="metric-value mono" id="balance">—</div>
+                        </div>
+                    </div>
+                    <div class="metric-card glass-card" data-accent="blue">
+                        <div class="metric-icon">◫</div>
+                        <div class="metric-body">
+                            <div class="metric-label">Holdings</div>
+                            <div class="metric-value mono" id="holdings">—</div>
+                        </div>
+                    </div>
+                    <div class="metric-card glass-card" data-accent="gold">
+                        <div class="metric-icon">≡</div>
+                        <div class="metric-body">
+                            <div class="metric-label">Transactions</div>
+                            <div class="metric-value mono" id="transactionsCount">—</div>
+                        </div>
+                    </div>
+                    <div class="metric-card glass-card" id="pnlCard" data-accent="emerald">
+                        <div class="metric-icon">↗</div>
+                        <div class="metric-body">
+                            <div class="metric-label">Today's P&amp;L</div>
+                            <div class="metric-value mono" id="todaysPnl">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="movers-row">
+                <div class="movers-card glass-card">
+                    <div class="card-title gain">📈 Top Gainers</div>
+                    <div class="movers-list" id="gainersList"></div>
+                </div>
+                <div class="movers-card glass-card">
+                    <div class="card-title loss">📉 Top Losers</div>
+                    <div class="movers-list" id="losersList"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ PREDICTION + WATCHLIST ============ -->
+        <section class="panel-section" id="predict">
+            <div class="top-grid">
+
+                <div class="glass-card predict-card">
+                    <div class="card-title">AI Stock Prediction</div>
+
+                    <div class="prediction-input">
+                        <input type="text" id="ticker" placeholder="Enter stock symbol — e.g. TCS" autocomplete="off">
+                        <button class="btn btn-primary" id="predictBtn">Analyze</button>
+                    </div>
+                    <div class="ticker-suggestions" id="tickerSuggestions"></div>
+
+                    <div id="predictionResult" class="prediction-result"></div>
+                </div>
+
+                <div class="glass-card watchlist-card">
+                    <div class="card-title">⭐ Watchlist</div>
+
+                    <div class="watchlist-controls">
+                        <input type="text" id="watchlistInput" placeholder="Add symbol — e.g. INFY" autocomplete="off">
+                        <button class="btn btn-secondary" id="watchlistAddBtn">Add</button>
+                    </div>
+
+                    <div id="watchlistContainer" class="watchlist-list"></div>
+                </div>
+
+            </div>
+
+            <!-- ============ AI ASSISTANT ============ -->
+            <div class="glass-card assistant-card">
+                <div class="card-title">🤖 AI Trading Assistant</div>
+                <div class="assistant-feed" id="assistantFeed">
+                    <div class="assistant-loading">Reading the market…</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ CHART ============ -->
+        <section class="panel-section" id="chart">
+            <div class="glass-card chart-card">
+                <div class="section-head">
+                    <h2 id="chartTitle">Price Chart</h2>
+                    <div class="chart-badge" id="chartSignalBadge"></div>
+                </div>
+                <div class="chart-canvas-wrap">
+                    <canvas id="stockChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ TRADING STATS ============ -->
+        <section class="panel-section">
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card glass-card">
+                    <div class="stat-label">Total Trades</div>
+                    <div class="stat-value mono" id="statTotalTrades">0</div>
+                </div>
+                <div class="stat-card glass-card">
+                    <div class="stat-label">Winning Trades</div>
+                    <div class="stat-value mono win" id="statWinning">0</div>
+                </div>
+                <div class="stat-card glass-card">
+                    <div class="stat-label">Losing Trades</div>
+                    <div class="stat-value mono loss" id="statLosing">0</div>
+                </div>
+                <div class="stat-card glass-card">
+                    <div class="stat-label">Win Rate</div>
+                    <div class="stat-value mono" id="statWinRate">0%</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ PAPER TRADING ============ -->
+        <section class="panel-section" id="trade">
+            <div class="glass-card trade-card">
+                <div class="card-title">💼 Paper Trading</div>
+                <div class="trade-controls">
+                    <div class="qty-stepper">
+                        <button class="qty-btn" id="qtyMinus">−</button>
+                        <input type="number" id="quantity" value="1" min="1">
+                        <button class="qty-btn" id="qtyPlus">+</button>
+                    </div>
+                    <button class="btn btn-buy" id="buyBtn">BUY</button>
+                    <button class="btn btn-sell" id="sellBtn">SELL</button>
+                </div>
+                <div class="trade-hint">Trades execute at live market price for the symbol shown above.</div>
+            </div>
+        </section>
+
+        <!-- ============ PORTFOLIO + TRANSACTIONS ============ -->
+        <section class="panel-section" id="portfolio">
+            <div class="bottom-grid">
+
+                <div class="glass-card portfolio-section">
+                    <div class="section-head">
+                        <h2>Portfolio</h2>
+                        <span class="section-sub mono" id="portfolioGrowth"></span>
+                    </div>
+                    <div class="table-scroll">
+                        <table id="portfolioTable">
+                            <thead>
+                                <tr>
+                                    <th>Stock</th>
+                                    <th>Shares</th>
+                                    <th>Avg. Price</th>
+                                    <th>LTP</th>
+                                    <th>P&amp;L</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <div class="empty-state" id="portfolioEmpty" hidden>No holdings yet — buy a stock to get started.</div>
+                    </div>
+                </div>
+
+                <div class="glass-card transactions-section" id="history">
+                    <div class="section-head">
+                        <h2>Transaction History</h2>
+                        <div class="filter-row">
+                            <button class="filter-chip active" data-filter="ALL">All</button>
+                            <button class="filter-chip" data-filter="BUY">Buy</button>
+                            <button class="filter-chip" data-filter="SELL">Sell</button>
+                        </div>
+                    </div>
+                    <div class="table-scroll">
+                        <table id="transactionsTable">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Stock</th>
+                                    <th>Qty</th>
+                                    <th>Amount</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <div class="empty-state" id="transactionsEmpty" hidden>No transactions yet.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ ACTIVITY FEED ============ -->
+        <section class="panel-section">
+            <div class="glass-card activity-card">
+                <div class="card-title">Recent Activity</div>
+                <div class="activity-feed" id="activityFeed"></div>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<!-- ===================== TOASTS ===================== -->
+<div class="toast-stack" id="toastStack"></div>
+
+<!-- ===================== FLOATING AI BOT ===================== -->
+<div class="ai-bot-wrap">
+    <div class="ai-bot-popover" id="aiBotPopover">
+        <div class="ai-bot-popover-head">
+            <span>🤖 TradePilot Assistant</span>
+            <button id="aiBotClose" aria-label="Close">×</button>
+        </div>
+        <div class="ai-bot-messages" id="aiBotMessages">
+            <div class="bot-message-empty">Ask me about today's market, or tap a suggestion below.</div>
+        </div>
+        <div class="ai-bot-suggestions" id="aiBotSuggestions">
+            <button class="bot-suggestion" data-action="movers">Top movers today</button>
+            <button class="bot-suggestion" data-action="sentiment">Market sentiment?</button>
+            <button class="bot-suggestion" data-action="bullish">What's bullish?</button>
+            <button class="bot-suggestion" data-action="portfolio">My portfolio P&amp;L</button>
+        </div>
+    </div>
+    <button class="ai-bot-fab" id="aiBotFab" aria-label="Open AI Assistant">
+        <span class="ai-bot-pulse"></span>
+        <span class="ai-bot-icon">🤖</span>
+    </button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

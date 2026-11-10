@@ -1,26 +1,23 @@
 """
-Entry point for the TradePilot AI backend.
+Entry point for Trade AI Pilot modern FastAPI backend.
 
 Run this from the project root with:
-    python run.py
-
-It starts the Flask development server defined in api/app.py on
-http://127.0.0.1:5001. Open frontend/index.html in a browser (or serve it
-with any static file server) to use the application.
+    python3 run.py
 """
 
 import os
 import sys
+import uvicorn
 
-# Make the api/ package importable when running from the project root
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "api"))
-
-from app import app  # noqa: E402
+# Ensure the backend directory is in the Python module search path
+backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
+sys.path.insert(0, backend_dir)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5001))
-    print(f"\n========================================================")
-    print(f"  TradePilot AI Platform is running!")
-    print(f"  Access the web app at: http://127.0.0.1:{port}")
-    print(f"========================================================\n")
-    app.run(debug=True, port=port)
+    port = int(os.environ.get("PORT", 8000))
+    print("\n========================================================")
+    print("  Trade AI Pilot — Institutional NSE/BSE Trading Terminal")
+    print(f"  Interactive OpenAPI Docs: http://127.0.0.1:{port}/docs")
+    print(f"  API Endpoint:            http://127.0.0.1:{port}/api/v1")
+    print("========================================================\n")
+    uvicorn.run("app.main:app", host="127.0.0.1", port=port, reload=True, app_dir=backend_dir)

@@ -8,7 +8,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
 
 
 class Settings:
-    PROJECT_NAME: str = "TradePilot AI"
+    PROJECT_NAME: str = "Trade AI Pilot"
     VERSION: str = "2.0.0"
     API_V1_STR: str = "/api/v1"
 

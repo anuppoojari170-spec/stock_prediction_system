@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-main: #0B1120;
+  --bg-sidebar: #0D1627;
+  --bg-card: #111C30;
+  --bg-elevated: #1A2940;
+  --border-color: #26354B;
+  --text-primary: #F1F5FC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --brand-primary: #386BFF;
+  --brand-hover: #4C7DFF;
+  --brand-secondary: #7657F6;
+  --profit: #00C087;
+  --loss: #F04452;
+  --neutral: #F5B942;
+}
+
+.light {
+  --bg-main: #F5F7FB;
+  --bg-sidebar: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-elevated: #F1F5F9;
+  --border-color: #E2E8F0;
+  --text-primary: #172033;
+  --text-secondary: #64748B;
+  --text-muted: #94A3B8;
+  --brand-primary: #386BFF;
+  --brand-hover: #4C7DFF;
+  --brand-secondary: #7657F6;
+  --profit: #008F68;
+  --loss: #DC3545;
+  --neutral: #D97706;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Tabular Numerals for Financial Data */
+.font-mono-numbers {
+  font-family: 'IBM Plex Mono', monospace;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+/* Institutional Clean Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-primary);
+}
+
+/* Sub-card & institutional borders */
+.nexus-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  transition: border-color 0.15s ease;
+}
+
+.nexus-card:hover {
+  border-color: rgba(56, 107, 255, 0.3);
+}
+
+.nexus-surface {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+/* Ticker marquee animation */
+@keyframes tickerSlide {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: tickerSlide 40s linear infinite;
+}
+
+.ticker-track:hover {
+  animation-play-state: paused;
+}

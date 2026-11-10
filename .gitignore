@@ -7,9 +7,11 @@ __pycache__/
 data/*.db
 data/*.db-journal
 data/*.db-wal
+data/*.db-shm
 *.sqlite
 *.sqlite3
 *.db
+*.db-shm
 
 # Model artifacts
 models/*.pkl
@@ -40,6 +42,14 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+# Node & Frontend Build Artifacts
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+*.tsbuildinfo
+.npm
 
 # Logs
 *.log

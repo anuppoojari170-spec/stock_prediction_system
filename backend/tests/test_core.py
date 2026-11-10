@@ -29,8 +29,8 @@ print("\n1. Initializing database...")
 init_db()
 conn = get_raw_connection()
 cur = conn.cursor()
-from app.db.session import is_postgres
-if is_postgres():
+from app.db.session import PostgresConnectionWrapper
+if isinstance(conn, PostgresConnectionWrapper):
     cur.execute("SELECT table_name as name FROM information_schema.tables WHERE table_schema = 'public'")
 else:
     cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
