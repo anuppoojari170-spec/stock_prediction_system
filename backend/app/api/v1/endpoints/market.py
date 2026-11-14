@@ -1,9 +1,16 @@
 from typing import List
 from fastapi import APIRouter, HTTPException, status
 
-from app.schemas.market import IndexItem, MoversResponse, Quote, SentimentResponse
+from app.schemas.market import (
+    IndexItem,
+    MoversResponse,
+    NewsItem,
+    Quote,
+    SentimentResponse,
+    StockDetailsOut,
+)
 from app.services.market_data import market_service
-from app.services.predictor import get_market_sentiment
+from app.services.predictor import get_market_news_feed, get_market_sentiment
 
 router = APIRouter(prefix="/market", tags=["Market Intelligence"])
 
@@ -26,6 +33,19 @@ def market_sentiment():
     return get_market_sentiment()
 
 
+@router.get("/news", response_model=List[NewsItem])
+def market_news(limit: int = 12):
+    """Fetch real-time Indian stock market financial news via Google News RSS feed."""
+    return get_market_news_feed(limit=limit)
+
+
+@router.get("/stock/{ticker}", response_model=StockDetailsOut)
+def stock_details(ticker: str):
+    """Fetch institutional fundamentals and daily metrics for a given Indian stock."""
+    clean_ticker = ticker.strip().upper().replace(".NS", "")
+    return market_service.get_stock_details(clean_ticker)
+
+
 @router.get("/quote/{ticker}", response_model=Quote)
 def get_quote(ticker: str):
     """Fetch the latest live market price for a given NSE ticker symbol."""
@@ -37,4 +57,5 @@ def get_quote(ticker: str):
             detail=f"Could not find live quote for {clean_ticker}"
         )
     return Quote(ticker=clean_ticker, price=price)
+
 

@@ -90,34 +90,35 @@ interface AppState {
 // Initial Indian Stock Market Watchlists
 const defaultWatchlists: Record<string, WatchlistItem[]> = {
   "NIFTY 50": [
-    { ticker: "RELIANCE", companyName: "Reliance Industries Ltd", pinned: true, price: 2984.50, change_abs: 38.20, change_pct: 1.30, volume: "6.8M", sparkline: [2945, 2960, 2952, 2975, 2984.5] },
-    { ticker: "TCS", companyName: "Tata Consultancy Services", pinned: true, price: 4120.75, change_abs: 45.30, change_pct: 1.11, volume: "2.1M", sparkline: [4070, 4085, 4100, 4095, 4120.7] },
-    { ticker: "HDFCBANK", companyName: "HDFC Bank Limited", pinned: true, price: 1742.30, change_abs: -8.40, change_pct: -0.48, volume: "12.4M", sparkline: [1755, 1752, 1748, 1740, 1742.3] },
-    { ticker: "INFY", companyName: "Infosys Limited", pinned: false, price: 1865.10, change_abs: 22.80, change_pct: 1.24, volume: "5.4M", sparkline: [1840, 1845, 1855, 1860, 1865.1] },
-    { ticker: "ICICIBANK", companyName: "ICICI Bank Limited", pinned: false, price: 1268.90, change_abs: 14.50, change_pct: 1.16, volume: "8.9M", sparkline: [1252, 1258, 1262, 1265, 1268.9] },
-    { ticker: "BHARTIARTL", companyName: "Bharti Airtel Limited", pinned: false, price: 1595.60, change_abs: 6.20, change_pct: 0.39, volume: "3.7M", sparkline: [1588, 1590, 1592, 1598, 1595.6] },
-    { ticker: "SBIN", companyName: "State Bank of India", pinned: false, price: 818.40, change_abs: -4.10, change_pct: -0.50, volume: "9.2M", sparkline: [824, 822, 820, 816, 818.4] },
-    { ticker: "ITC", companyName: "ITC Limited", pinned: false, price: 476.85, change_abs: 1.95, change_pct: 0.41, volume: "7.1M", sparkline: [474, 475, 476, 477, 476.85] },
+    { ticker: "RELIANCE", companyName: "Reliance Industries Ltd", pinned: true, price: 1330.00, change_abs: 15.20, change_pct: 1.15, volume: "6.8M", sparkline: [1310, 1318, 1322, 1328, 1330] },
+    { ticker: "TCS", companyName: "Tata Consultancy Services", pinned: true, price: 3700.00, change_abs: 35.30, change_pct: 0.95, volume: "2.1M", sparkline: [3650, 3670, 3685, 3690, 3700] },
+    { ticker: "HDFCBANK", companyName: "HDFC Bank Limited", pinned: true, price: 1750.00, change_abs: -7.40, change_pct: -0.42, volume: "12.4M", sparkline: [1765, 1760, 1755, 1748, 1750] },
+    { ticker: "INFY", companyName: "Infosys Limited", pinned: false, price: 1550.00, change_abs: 18.80, change_pct: 1.24, volume: "5.4M", sparkline: [1530, 1535, 1542, 1548, 1550] },
+    { ticker: "ICICIBANK", companyName: "ICICI Bank Limited", pinned: false, price: 1270.00, change_abs: 14.50, change_pct: 1.16, volume: "8.9M", sparkline: [1252, 1258, 1262, 1265, 1270] },
+    { ticker: "BHARTIARTL", companyName: "Bharti Airtel Limited", pinned: false, price: 1600.00, change_abs: 6.20, change_pct: 0.39, volume: "3.7M", sparkline: [1588, 1590, 1592, 1598, 1600] },
+    { ticker: "SBIN", companyName: "State Bank of India", pinned: false, price: 820.00, change_abs: -4.10, change_pct: -0.50, volume: "9.2M", sparkline: [826, 824, 822, 818, 820] },
+    { ticker: "ITC", companyName: "ITC Limited", pinned: false, price: 460.00, change_abs: 1.95, change_pct: 0.41, volume: "7.1M", sparkline: [456, 458, 459, 460, 460] },
   ],
   "Banking": [
-    { ticker: "HDFCBANK", companyName: "HDFC Bank Limited", pinned: true, price: 1742.30, change_abs: -8.40, change_pct: -0.48, volume: "12.4M", sparkline: [1755, 1752, 1748, 1740, 1742.3] },
-    { ticker: "ICICIBANK", companyName: "ICICI Bank Limited", pinned: true, price: 1268.90, change_abs: 14.50, change_pct: 1.16, volume: "8.9M", sparkline: [1252, 1258, 1262, 1265, 1268.9] },
-    { ticker: "SBIN", companyName: "State Bank of India", pinned: true, price: 818.40, change_abs: -4.10, change_pct: -0.50, volume: "9.2M", sparkline: [824, 822, 820, 816, 818.4] },
-    { ticker: "KOTAKBANK", companyName: "Kotak Mahindra Bank", pinned: false, price: 1785.20, change_abs: 5.60, change_pct: 0.31, volume: "3.1M", sparkline: [1778, 1780, 1782, 1788, 1785.2] },
-    { ticker: "AXISBANK", companyName: "Axis Bank Limited", pinned: false, price: 1195.40, change_abs: -7.80, change_pct: -0.65, volume: "4.5M", sparkline: [1205, 1202, 1198, 1193, 1195.4] },
+    { ticker: "HDFCBANK", companyName: "HDFC Bank Limited", pinned: true, price: 1750.00, change_abs: -7.40, change_pct: -0.42, volume: "12.4M", sparkline: [1765, 1760, 1755, 1748, 1750] },
+    { ticker: "ICICIBANK", companyName: "ICICI Bank Limited", pinned: true, price: 1270.00, change_abs: 14.50, change_pct: 1.16, volume: "8.9M", sparkline: [1252, 1258, 1262, 1265, 1270] },
+    { ticker: "SBIN", companyName: "State Bank of India", pinned: true, price: 820.00, change_abs: -4.10, change_pct: -0.50, volume: "9.2M", sparkline: [826, 824, 822, 818, 820] },
+    { ticker: "KOTAKBANK", companyName: "Kotak Mahindra Bank", pinned: false, price: 1850.00, change_abs: 5.60, change_pct: 0.31, volume: "3.1M", sparkline: [1840, 1845, 1848, 1852, 1850] },
+    { ticker: "AXISBANK", companyName: "Axis Bank Limited", pinned: false, price: 1180.00, change_abs: -7.80, change_pct: -0.65, volume: "4.5M", sparkline: [1192, 1188, 1185, 1178, 1180] },
   ],
   "IT": [
-    { ticker: "TCS", companyName: "Tata Consultancy Services", pinned: true, price: 4120.75, change_abs: 45.30, change_pct: 1.11, volume: "2.1M", sparkline: [4070, 4085, 4100, 4095, 4120.7] },
-    { ticker: "INFY", companyName: "Infosys Limited", pinned: true, price: 1865.10, change_abs: 22.80, change_pct: 1.24, volume: "5.4M", sparkline: [1840, 1845, 1855, 1860, 1865.1] },
-    { ticker: "HCLTECH", companyName: "HCL Technologies Ltd", pinned: false, price: 1824.60, change_abs: 18.40, change_pct: 1.02, volume: "2.8M", sparkline: [1805, 1810, 1818, 1822, 1824.6] },
-    { ticker: "WIPRO", companyName: "Wipro Limited", pinned: false, price: 564.30, change_abs: -2.10, change_pct: -0.37, volume: "4.1M", sparkline: [568, 567, 566, 563, 564.3] },
+    { ticker: "TCS", companyName: "Tata Consultancy Services", pinned: true, price: 3700.00, change_abs: 35.30, change_pct: 0.95, volume: "2.1M", sparkline: [3650, 3670, 3685, 3690, 3700] },
+    { ticker: "INFY", companyName: "Infosys Limited", pinned: true, price: 1550.00, change_abs: 18.80, change_pct: 1.24, volume: "5.4M", sparkline: [1530, 1535, 1542, 1548, 1550] },
+    { ticker: "HCLTECH", companyName: "HCL Technologies Ltd", pinned: false, price: 1800.00, change_abs: 18.40, change_pct: 1.02, volume: "2.8M", sparkline: [1780, 1785, 1792, 1798, 1800] },
+    { ticker: "WIPRO", companyName: "Wipro Limited", pinned: false, price: 560.00, change_abs: -2.10, change_pct: -0.37, volume: "4.1M", sparkline: [565, 564, 562, 558, 560] },
   ],
   "My Watchlist": [
-    { ticker: "RELIANCE", companyName: "Reliance Industries Ltd", pinned: true, price: 2984.50, change_abs: 38.20, change_pct: 1.30, volume: "6.8M", sparkline: [2945, 2960, 2952, 2975, 2984.5] },
-    { ticker: "TATAMOTORS", companyName: "Tata Motors Limited", pinned: true, price: 988.40, change_abs: 12.60, change_pct: 1.29, volume: "7.8M", sparkline: [974, 978, 982, 986, 988.4] },
-    { ticker: "LTIM", companyName: "LTIMindtree Limited", pinned: false, price: 5940.00, change_abs: 85.00, change_pct: 1.45, volume: "850K", sparkline: [5840, 5870, 5910, 5925, 5940] },
+    { ticker: "RELIANCE", companyName: "Reliance Industries Ltd", pinned: true, price: 1330.00, change_abs: 15.20, change_pct: 1.15, volume: "6.8M", sparkline: [1310, 1318, 1322, 1328, 1330] },
+    { ticker: "TATAMOTORS", companyName: "Tata Motors Limited", pinned: true, price: 790.00, change_abs: 10.60, change_pct: 1.35, volume: "7.8M", sparkline: [778, 782, 785, 788, 790] },
+    { ticker: "LTIM", companyName: "LTIMindtree Limited", pinned: false, price: 5700.00, change_abs: 65.00, change_pct: 1.15, volume: "850K", sparkline: [5620, 5650, 5680, 5690, 5700] },
   ],
 };
+
 
 const initialOrders: OrderItem[] = [
   {

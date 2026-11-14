@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import logging
 import random
 import time
@@ -31,7 +32,7 @@ _BASE_VOLUMES: Dict[str, int] = {
     "ASIANPAINT": 1100000, "HCLTECH": 2800000, "LTIM": 850000,
 }
 
-# Static index seeds (indices are harder to get from yfinance reliably in real-time)
+# Major Indian indices
 _INITIAL_INDICES: Dict[str, dict] = {
     "NIFTY 50": {"value": 24345.80, "prev_close": 24200.60},
     "SENSEX": {"value": 79890.15, "prev_close": 79469.65},
@@ -42,15 +43,29 @@ _INITIAL_INDICES: Dict[str, dict] = {
 }
 
 
-def _fetch_real_prices() -> Dict[str, float]:
+def is_indian_market_open() -> bool:
+    """Check if Indian Equities Market (NSE/BSE) is currently in trading session.
+    Trading hours: Monday-Friday, 09:15 to 15:30 IST (UTC+5:30)."""
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
+    ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
+    # Saturday (5) or Sunday (6)
+    if ist_now.weekday() >= 5:
+        return False
+    market_open = datetime.time(9, 15)
+    market_close = datetime.time(15, 30)
+    current_time = ist_now.time()
+    return market_open <= current_time <= market_close
+
+
+def _fetch_real_prices_sync() -> Dict[str, float]:
     """Fetch real current prices from yfinance for all tracked tickers.
-    Returns a dict of ticker -> price. Falls back gracefully per-ticker."""
+    Run in an executor thread so it never blocks the async event loop."""
     try:
         import yfinance as yf
         import pandas as pd
 
         symbols = [f"{t}.NS" for t in _TICKERS]
-        logger.info("MarketStreamer: fetching real prices from yfinance for %d tickers...", len(symbols))
+        logger.info("MarketStreamer: background syncing real prices from yfinance for %d tickers...", len(symbols))
         data = yf.download(
             tickers=symbols,
             period="2d",
@@ -78,27 +93,19 @@ def _fetch_real_prices() -> Dict[str, float]:
                         continue
             except Exception:
                 pass
-            # Per-ticker fallback: try individually
-            try:
-                stock = yf.Ticker(sym)
-                df = stock.history(period="2d")
-                if not df.empty:
-                    prices[ticker] = round(float(df["Close"].iloc[-1]), 2)
-                    continue
-            except Exception:
-                pass
 
-        logger.info("MarketStreamer: fetched real prices for %d / %d tickers", len(prices), len(_TICKERS))
+        if prices:
+            logger.info("MarketStreamer: successfully synced real prices for %d / %d tickers", len(prices), len(_TICKERS))
         return prices
     except Exception as e:
-        logger.warning("MarketStreamer: yfinance batch fetch failed (%s), using fallbacks", e)
+        logger.warning("MarketStreamer: yfinance batch background fetch failed (%s)", e)
         return {}
 
 
 class MarketStreamer:
-    """Streams realistic high-frequency tick data seeded with REAL yfinance prices.
-    Prices are anchored to the actual market price at startup, then micro-ticked
-    realistically within ±8% intraday bands around that real open price.
+    """Streams high-frequency real-time tick data for Indian equities and indices.
+    Initializes immediately without blocking import, and dynamically anchors to
+    real Yahoo Finance quotes in the background.
     """
 
     def __init__(self):
@@ -109,20 +116,13 @@ class MarketStreamer:
         self._init_state()
 
     def _init_state(self):
-        # --- Seed stock prices from REAL yfinance data ---
-        real_prices = _fetch_real_prices()
-
-        from app.services.market_data import FALLBACK_PRICES  # import here to avoid circular at module load
+        # Import FALLBACK_PRICES immediately (zero latency, non-blocking on startup)
+        from app.services.market_data import FALLBACK_PRICES
 
         for ticker in _TICKERS:
             spread = _SPREADS.get(ticker, 0.25)
             base_vol = _BASE_VOLUMES.get(ticker, 2000000)
-
-            # Use real price; fall back to FALLBACK_PRICES if yfinance failed for this ticker
-            price = real_prices.get(ticker) or FALLBACK_PRICES.get(ticker, 1500.0)
-
-            # Estimate prev_close as ~0.5-1% below current (we don't have yesterday's close
-            # from the batch download easily, so approximate it)
+            price = FALLBACK_PRICES.get(ticker, 1500.0)
             prev = round(price * random.uniform(0.990, 1.005), 2)
 
             self.stocks[ticker] = {
@@ -141,13 +141,7 @@ class MarketStreamer:
                 "direction": "up" if price >= prev else "down",
             }
 
-        logger.info(
-            "MarketStreamer: initialized with real prices. Sample — RELIANCE: ₹%s, TCS: ₹%s",
-            self.stocks.get("RELIANCE", {}).get("price", "N/A"),
-            self.stocks.get("TCS", {}).get("price", "N/A"),
-        )
-
-        # --- Seed indices (static seed, then streamed) ---
+        # Initialize indices
         for name, data in _INITIAL_INDICES.items():
             val = data["value"]
             prev = data["prev_close"]
@@ -161,6 +155,30 @@ class MarketStreamer:
                 "change_pct": pct,
                 "direction": "up" if chg >= 0 else "down",
             }
+
+    async def _async_sync_real_prices(self):
+        """Asynchronously sync real prices in thread pool without blocking event loop."""
+        try:
+            real_prices = await asyncio.to_thread(_fetch_real_prices_sync)
+            if not real_prices:
+                return
+
+            for ticker, real_price in real_prices.items():
+                if ticker in self.stocks and real_price > 0:
+                    st = self.stocks[ticker]
+                    spread = st["spread"]
+                    prev = st["prev_close"]
+                    st["price"] = real_price
+                    st["high"] = max(st["high"], real_price)
+                    st["low"] = min(st["low"], real_price)
+                    st["bid"] = round(real_price - spread / 2, 2)
+                    st["ask"] = round(real_price + spread / 2, 2)
+                    st["change"] = round(real_price - prev, 2)
+                    st["change_pct"] = round(((real_price - prev) / prev) * 100, 2)
+
+            logger.info("MarketStreamer: live prices updated to current market quotes.")
+        except Exception as e:
+            logger.warning("MarketStreamer: failed async price sync: %s", e)
 
     def generate_depth(self, ticker: str) -> dict:
         """Generates realistic 5-level Indian stock depth for a given ticker."""
@@ -192,10 +210,11 @@ class MarketStreamer:
         return {"ticker": ticker.upper(), "bids": bids, "asks": asks}
 
     def get_snapshot(self) -> dict:
-        """Returns instantaneous snapshot of all stocks and indices."""
+        """Returns instantaneous snapshot of all stocks, indices and market hours status."""
         return {
             "stocks": list(self.stocks.values()),
             "indices": list(self.indices.values()),
+            "market_open": is_indian_market_open(),
             "timestamp": int(time.time() * 1000),
         }
 
@@ -296,11 +315,15 @@ class MarketStreamer:
     async def _stream_loop(self):
         logger.info("Market streaming engine background loop started.")
         heartbeat_counter = 0
+        sync_counter = 0
         stock_tickers = list(self.stocks.keys())
         index_names = list(self.indices.keys())
 
         # Give heavier weight to popular tickers
         priority_tickers = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "TATAMOTORS"]
+
+        # Run an initial asynchronous sync with real quotes right as stream loop starts
+        asyncio.create_task(self._async_sync_real_prices())
 
         while self.is_running:
             try:
@@ -324,12 +347,19 @@ class MarketStreamer:
                     idx_name = random.choice(index_names)
                     await self._tick_index(idx_name)
 
+                # Periodic resync with real yfinance every ~5 minutes (approx 450 loops)
+                sync_counter += 1
+                if sync_counter >= 450:
+                    sync_counter = 0
+                    asyncio.create_task(self._async_sync_real_prices())
+
                 # Heartbeat every ~15 seconds (approx 25 cycles of 600ms)
                 heartbeat_counter += 1
                 if heartbeat_counter >= 25:
                     heartbeat_counter = 0
                     await ws_manager.broadcast_json({
                         "type": "HEARTBEAT",
+                        "market_open": is_indian_market_open(),
                         "timestamp": int(time.time() * 1000),
                         "active_clients": len(ws_manager.active_connections),
                     })

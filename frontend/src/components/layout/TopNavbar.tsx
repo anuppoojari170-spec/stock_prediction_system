@@ -16,15 +16,16 @@ import { useAuthStore } from "../../store/useAuthStore";
 import { ExchangeType } from "../../types";
 
 const popularStocks = [
-  { ticker: "RELIANCE", name: "Reliance Industries Ltd", price: 2984.50, changePct: 1.30 },
-  { ticker: "TCS", name: "Tata Consultancy Services", price: 4120.75, changePct: 1.11 },
-  { ticker: "HDFCBANK", name: "HDFC Bank Limited", price: 1742.30, changePct: -0.48 },
-  { ticker: "INFY", name: "Infosys Limited", price: 1865.10, changePct: 1.24 },
-  { ticker: "ICICIBANK", name: "ICICI Bank Limited", price: 1268.90, changePct: 1.16 },
-  { ticker: "BHARTIARTL", name: "Bharti Airtel Limited", price: 1595.60, changePct: 0.39 },
-  { ticker: "SBIN", name: "State Bank of India", price: 818.40, changePct: -0.50 },
-  { ticker: "TATAMOTORS", name: "Tata Motors Limited", price: 988.40, changePct: 1.29 },
+  { ticker: "RELIANCE", name: "Reliance Industries Ltd", price: 1330.00, changePct: 1.15 },
+  { ticker: "TCS", name: "Tata Consultancy Services", price: 3700.00, changePct: 0.95 },
+  { ticker: "HDFCBANK", name: "HDFC Bank Limited", price: 1750.00, changePct: -0.42 },
+  { ticker: "INFY", name: "Infosys Limited", price: 1550.00, changePct: 1.24 },
+  { ticker: "ICICIBANK", name: "ICICI Bank Limited", price: 1270.00, changePct: 1.16 },
+  { ticker: "BHARTIARTL", name: "Bharti Airtel Limited", price: 1600.00, changePct: 0.39 },
+  { ticker: "SBIN", name: "State Bank of India", price: 820.00, changePct: -0.50 },
+  { ticker: "TATAMOTORS", name: "Tata Motors Limited", price: 790.00, changePct: 1.29 },
 ];
+
 
 export const TopNavbar: React.FC = () => {
   const {
@@ -55,8 +56,9 @@ export const TopNavbar: React.FC = () => {
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  // IST Clock state
+  // IST Clock & Market Status state
   const [currentTime, setCurrentTime] = useState("");
+  const [isMarketOpen, setIsMarketOpen] = useState(false);
 
   useEffect(() => {
     const updateTime = () => {
@@ -69,11 +71,23 @@ export const TopNavbar: React.FC = () => {
           hour12: false,
         }) + " IST"
       );
+
+      // Check Indian market trading hours (Mon-Fri 09:15 - 15:30 IST)
+      const istOffset = 5.5 * 60 * 60 * 1000;
+      const istDate = new Date(now.getTime() + istOffset + now.getTimezoneOffset() * 60000);
+      const day = istDate.getDay();
+      if (day === 0 || day === 6) {
+        setIsMarketOpen(false);
+      } else {
+        const timeVal = istDate.getHours() * 60 + istDate.getMinutes();
+        setIsMarketOpen(timeVal >= 9 * 60 + 15 && timeVal <= 15 * 60 + 30);
+      }
     };
     updateTime();
     const timer = setInterval(updateTime, 1000);
     return () => clearInterval(timer);
   }, []);
+
 
   // Close search/notifs when clicking outside
   useEffect(() => {
@@ -129,11 +143,23 @@ export const TopNavbar: React.FC = () => {
           ))}
         </div>
 
-        {/* Live IST Clock */}
-        <div className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#111C30] border border-[#26354B] text-xs font-mono text-[#94A3B8]">
-          <span className="w-2 h-2 rounded-full bg-[#00C087]"></span>
-          <span>{currentTime || "09:15:00 IST"}</span>
+        {/* Live IST Clock & Market Status */}
+        <div className="hidden md:flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#111C30] border border-[#26354B] text-xs font-mono text-[#94A3B8]">
+            <span className={`w-2 h-2 rounded-full ${isMarketOpen ? "bg-[#00C087] animate-pulse" : "bg-[#F5B942]"}`}></span>
+            <span>{currentTime || "09:15:00 IST"}</span>
+          </div>
+          <span
+            className={`px-2 py-0.5 rounded text-[10px] font-semibold tracking-wider uppercase border ${
+              isMarketOpen
+                ? "bg-[#00C087]/15 text-[#00C087] border-[#00C087]/30"
+                : "bg-[#F5B942]/15 text-[#F5B942] border-[#F5B942]/30"
+            }`}
+          >
+            {isMarketOpen ? "MARKET OPEN" : "AFTER HOURS"}
+          </span>
         </div>
+
 
         {/* Real-Time WebSocket Market Stream Indicator */}
         <div
@@ -221,34 +247,42 @@ export const TopNavbar: React.FC = () => {
             </div>
             <div className="max-h-64 overflow-y-auto">
               {filteredStocks.length > 0 ? (
-                filteredStocks.map((stock) => (
-                  <div
-                    key={stock.ticker}
-                    onClick={() => handleSelectStock(stock.ticker)}
-                    className="flex items-center justify-between px-3 py-2 hover:bg-[#1A2940] cursor-pointer transition-colors border-b border-[#26354B]/30 last:border-b-0"
-                  >
-                    <div>
-                      <div className="text-xs font-semibold text-[#F1F5FC]">
-                        {stock.ticker}
+                filteredStocks.map((stock) => {
+                  const live = liveTicks[stock.ticker];
+                  const displayPrice = live ? live.price : stock.price;
+                  const displayPct = live ? live.change_pct : stock.changePct;
+                  const isUp = displayPct >= 0;
+
+                  return (
+                    <div
+                      key={stock.ticker}
+                      onClick={() => handleSelectStock(stock.ticker)}
+                      className="flex items-center justify-between px-3 py-2 hover:bg-[#1A2940] cursor-pointer transition-colors border-b border-[#26354B]/30 last:border-b-0"
+                    >
+                      <div>
+                        <div className="text-xs font-semibold text-[#F1F5FC]">
+                          {stock.ticker}
+                        </div>
+                        <div className="text-[10px] text-[#94A3B8]">{stock.name}</div>
                       </div>
-                      <div className="text-[10px] text-[#94A3B8]">{stock.name}</div>
+                      <div className="text-right font-mono-numbers">
+                        <div className="text-xs font-medium text-[#F1F5FC]">
+                          ₹{displayPrice.toFixed(2)}
+                        </div>
+                        <div
+                          className={`text-[10px] font-semibold ${
+                            isUp ? "text-[#00C087]" : "text-[#F04452]"
+                          }`}
+                        >
+                          {isUp ? "+" : ""}
+                          {displayPct.toFixed(2)}%
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right font-mono-numbers">
-                      <div className="text-xs font-medium text-[#F1F5FC]">
-                        ₹{stock.price.toFixed(2)}
-                      </div>
-                      <div
-                        className={`text-[10px] font-semibold ${
-                          stock.changePct >= 0 ? "text-[#00C087]" : "text-[#F04452]"
-                        }`}
-                      >
-                        {stock.changePct >= 0 ? "+" : ""}
-                        {stock.changePct.toFixed(2)}%
-                      </div>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
+
                 <div className="p-4 text-center text-xs text-[#94A3B8]">
                   No matching NSE/BSE securities found.
                 </div>

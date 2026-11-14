@@ -1,4 +1,5 @@
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   TrendingUp,
   Briefcase,
@@ -9,23 +10,31 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
+import { tradingApi } from "../../services/api";
+import { PortfolioSummary } from "../../types";
 
 export const PortfolioSummaryCards: React.FC = () => {
   const { virtualBalance, usedMargin, mode } = useAppStore();
 
-  const totalInvested = 1245000.00;
-  const currentPortfolioValue = 1418520.50;
-  const totalPnl = currentPortfolioValue - totalInvested;
-  const growthPct = (totalPnl / totalInvested) * 100;
-  const todaysPnl = 18450.00;
-  const todaysGrowthPct = 1.32;
+  const { data: serverSummary } = useQuery<PortfolioSummary>({
+    queryKey: ["portfolioSummaryCards"],
+    queryFn: tradingApi.getSummary,
+    refetchInterval: 12000,
+  });
+
+  const totalInvested = serverSummary ? serverSummary.total_invested : 0.0;
+  const currentPortfolioValue = serverSummary ? serverSummary.current_value : 0.0;
+  const totalPnl = serverSummary ? serverSummary.total_pnl : 0.0;
+  const growthPct = serverSummary ? serverSummary.growth_pct : 0.0;
+  const todaysPnl = serverSummary ? serverSummary.todays_pnl : 0.0;
+  const holdingsCount = serverSummary ? serverSummary.holdings_count : 0;
   const isPnlPositive = totalPnl >= 0;
 
   const cards = [
     {
       title: "Total Investment",
       amount: totalInvested,
-      subtext: "Across 8 Holdings",
+      subtext: `Across ${holdingsCount} ${holdingsCount === 1 ? "Holding" : "Holdings"}`,
       icon: Briefcase,
       tooltip: "The total capital you have invested to buy shares in your portfolio.",
       highlight: null,
@@ -33,10 +42,10 @@ export const PortfolioSummaryCards: React.FC = () => {
     {
       title: "Current Portfolio Value",
       amount: currentPortfolioValue,
-      subtext: `Today: +₹${todaysPnl.toLocaleString("en-IN")} (+${todaysGrowthPct}%)`,
+      subtext: `Today: ${todaysPnl >= 0 ? "+" : ""}₹${todaysPnl.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: DollarSign,
       tooltip: "The present market valuation of all your equity shares at current market prices.",
-      highlight: "profit",
+      highlight: todaysPnl >= 0 ? "profit" : "loss",
     },
     {
       title: "Total Profit / Loss",
@@ -49,13 +58,14 @@ export const PortfolioSummaryCards: React.FC = () => {
     },
     {
       title: "Available Margin",
-      amount: virtualBalance,
+      amount: serverSummary?.balance !== undefined ? serverSummary.balance : virtualBalance,
       subtext: `Used Margin: ₹${usedMargin.toLocaleString("en-IN")}`,
       icon: Wallet,
       tooltip: "Unused liquid funds available immediately to place new equity or intraday orders.",
       highlight: "blue",
     },
   ];
+
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 select-none">

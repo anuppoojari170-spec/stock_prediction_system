@@ -1,106 +1,43 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Search,
   PieChart,
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
+import { tradingApi } from "../../services/api";
 import { Holding } from "../../types";
 
-const defaultHoldings: Holding[] = [
+const fallbackHoldings: Holding[] = [
   {
     ticker: "RELIANCE",
     companyName: "Reliance Industries Ltd",
-    shares: 100,
-    avg_price: 2680.00,
-    current_price: 2984.50,
-    invested: 268000.00,
-    current_value: 298450.00,
-    pnl: 30450.00,
-    pnl_pct: 11.36,
-    day_pnl: 3820.00,
-    day_pnl_pct: 1.30,
+    shares: 50,
+    avg_price: 1310.00,
+    current_price: 1330.00,
+    invested: 65500.00,
+    current_value: 66500.00,
+    pnl: 1000.00,
+    pnl_pct: 1.53,
+    day_pnl: 750.00,
+    day_pnl_pct: 1.14,
   },
   {
     ticker: "TCS",
     companyName: "Tata Consultancy Services",
-    shares: 60,
-    avg_price: 3850.00,
-    current_price: 4120.75,
-    invested: 231000.00,
-    current_value: 247245.00,
-    pnl: 16245.00,
-    pnl_pct: 7.03,
-    day_pnl: 2718.00,
-    day_pnl_pct: 1.11,
-  },
-  {
-    ticker: "HDFCBANK",
-    companyName: "HDFC Bank Limited",
-    shares: 150,
-    avg_price: 1620.00,
-    current_price: 1742.30,
-    invested: 243000.00,
-    current_value: 261345.00,
-    pnl: 18345.00,
-    pnl_pct: 7.55,
-    day_pnl: -1260.00,
-    day_pnl_pct: -0.48,
-  },
-  {
-    ticker: "INFY",
-    companyName: "Infosys Limited",
-    shares: 120,
-    avg_price: 1680.00,
-    current_price: 1865.10,
-    invested: 201600.00,
-    current_value: 223812.00,
-    pnl: 22212.00,
-    pnl_pct: 11.02,
-    day_pnl: 2736.00,
-    day_pnl_pct: 1.24,
-  },
-  {
-    ticker: "ICICIBANK",
-    companyName: "ICICI Bank Limited",
-    shares: 140,
-    avg_price: 1150.00,
-    current_price: 1268.90,
-    invested: 161000.00,
-    current_value: 177646.00,
-    pnl: 16646.00,
-    pnl_pct: 10.34,
-    day_pnl: 2030.00,
-    day_pnl_pct: 1.16,
-  },
-  {
-    ticker: "TATAMOTORS",
-    companyName: "Tata Motors Limited",
-    shares: 150,
-    avg_price: 920.00,
-    current_price: 988.40,
-    invested: 138000.00,
-    current_value: 148260.00,
-    pnl: 10260.00,
-    pnl_pct: 7.43,
-    day_pnl: 1890.00,
-    day_pnl_pct: 1.29,
-  },
-  {
-    ticker: "ITC",
-    companyName: "ITC Limited",
-    shares: 200,
-    avg_price: 450.00,
-    current_price: 476.85,
-    invested: 90000.00,
-    current_value: 95370.00,
-    pnl: 5370.00,
-    pnl_pct: 5.97,
-    day_pnl: 390.00,
-    day_pnl_pct: 0.41,
+    shares: 20,
+    avg_price: 3650.00,
+    current_price: 3700.00,
+    invested: 73000.00,
+    current_value: 74000.00,
+    pnl: 1000.00,
+    pnl_pct: 1.37,
+    day_pnl: 450.00,
+    day_pnl_pct: 0.61,
   },
 ];
 
-const sectorBreakdown = [
+const defaultSectorBreakdown = [
   { name: "Information Technology", pct: 32.5, color: "#386BFF" },
   { name: "Banking & Financials", pct: 29.8, color: "#7657F6" },
   { name: "Energy & Conglomerate", pct: 20.6, color: "#00C087" },
@@ -109,17 +46,51 @@ const sectorBreakdown = [
 ];
 
 export const PortfolioView: React.FC = () => {
-  const { setActiveTicker, setOrderSide, setActiveTab } = useAppStore();
+  const { setActiveTicker, setOrderSide, setActiveTab, liveTicks } = useAppStore();
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"pnl" | "value" | "ticker">("value");
 
-  const totalInvested = defaultHoldings.reduce((acc, h) => acc + h.invested, 0);
-  const totalValue = defaultHoldings.reduce((acc, h) => acc + h.current_value, 0);
-  const totalPnl = totalValue - totalInvested;
-  const growthPct = (totalPnl / totalInvested) * 100;
-  const todaysPnl = defaultHoldings.reduce((acc, h) => acc + (h.day_pnl || 0), 0);
+  const { data: serverHoldings } = useQuery<Holding[]>({
+    queryKey: ["portfolioHoldingsList"],
+    queryFn: tradingApi.getPortfolio,
+    refetchInterval: 10000,
+  });
 
-  const filteredHoldings = defaultHoldings
+  const rawHoldings = serverHoldings !== undefined ? serverHoldings : fallbackHoldings;
+
+  // Enriched with live WebSocket ticks
+  const enrichedHoldings = useMemo(() => {
+    return rawHoldings.map((h) => {
+      const live = liveTicks[h.ticker.toUpperCase()];
+      const currentPrice = live ? live.price : (h.current_price || h.avg_price);
+      const currentValue = Math.round(currentPrice * h.shares * 100) / 100;
+      const pnl = Math.round((currentValue - h.invested) * 100) / 100;
+      const pnlPct = h.invested > 0 ? Math.round((pnl / h.invested) * 10000) / 100 : 0.0;
+      const dayPnl = live ? Math.round(live.change * h.shares * 100) / 100 : (h.day_pnl || 0);
+      const dayPnlPct = live ? live.change_pct : (h.day_pnl_pct || 0);
+
+      return {
+        ...h,
+        current_price: currentPrice,
+        current_value: currentValue,
+        pnl,
+        pnl_pct: pnlPct,
+        day_pnl: dayPnl,
+        day_pnl_pct: dayPnlPct,
+      };
+    });
+  }, [rawHoldings, liveTicks]);
+
+  const totalInvested = enrichedHoldings.reduce((acc, h) => acc + h.invested, 0);
+  const totalValue = enrichedHoldings.reduce((acc, h) => acc + h.current_value, 0);
+  const totalPnl = totalValue - totalInvested;
+  const growthPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+  const todaysPnl = enrichedHoldings.reduce((acc, h) => acc + (h.day_pnl || 0), 0);
+
+  const sectorBreakdown = defaultSectorBreakdown;
+
+
+  const filteredHoldings = enrichedHoldings
     .filter(
       (h) =>
         h.ticker.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -131,6 +102,7 @@ export const PortfolioView: React.FC = () => {
       return b.current_value - a.current_value;
     });
 
+
   return (
     <div className="space-y-4 select-none">
       {/* 4 Summary Cards */}
@@ -140,7 +112,10 @@ export const PortfolioView: React.FC = () => {
           <div className="text-xl md:text-2xl font-bold font-mono-numbers text-[#F1F5FC] mt-1">
             ₹{totalInvested.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
           </div>
-          <span className="text-[11px] text-[#94A3B8] mt-1 block">In 7 Equity Holdings</span>
+          <span className="text-[11px] text-[#94A3B8] mt-1 block">
+            In {enrichedHoldings.length} {enrichedHoldings.length === 1 ? "Equity Holding" : "Equity Holdings"}
+          </span>
+
         </div>
 
         <div className="nexus-card p-4">

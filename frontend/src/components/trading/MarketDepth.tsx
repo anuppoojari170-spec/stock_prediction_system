@@ -8,6 +8,7 @@ interface MarketDepthProps {
 
 export const MarketDepth: React.FC<MarketDepthProps> = ({ ticker }) => {
   const streamDepth = useAppStore((state) => state.liveDepth[ticker.toUpperCase()]);
+  const liveTick = useAppStore((state) => state.liveTicks[ticker.toUpperCase()]);
   const wsStatus = useAppStore((state) => state.wsStatus);
 
   // Use live streaming L2 order book depth if available, else responsive fallback
@@ -26,8 +27,8 @@ export const MarketDepth: React.FC<MarketDepthProps> = ({ ticker }) => {
       });
     }
 
-    // Reference fallback based on stock price
-    const base = ticker.toUpperCase() === "RELIANCE" ? 2984.50 : 1500.0;
+    // Dynamic fallback based on live price
+    const base = liveTick?.price || (ticker.toUpperCase() === "RELIANCE" ? 1330.00 : 1500.0);
     return [
       { bidOrders: 12, bidQty: 1450, bidPrice: base - 0.40, askPrice: base, askQty: 1820, askOrders: 8 },
       { bidOrders: 24, bidQty: 3200, bidPrice: base - 0.70, askPrice: base + 0.40, askQty: 2450, askOrders: 15 },
@@ -35,7 +36,8 @@ export const MarketDepth: React.FC<MarketDepthProps> = ({ ticker }) => {
       { bidOrders: 31, bidQty: 4850, bidPrice: base - 1.50, askPrice: base + 1.25, askQty: 1950, askOrders: 11 },
       { bidOrders: 42, bidQty: 6200, bidPrice: base - 2.00, askPrice: base + 1.60, askQty: 5400, askOrders: 29 },
     ];
-  }, [ticker, streamDepth]);
+  }, [ticker, streamDepth, liveTick]);
+
 
   const totalBidQty = depthData.reduce((acc, row) => acc + row.bidQty, 0);
   const totalAskQty = depthData.reduce((acc, row) => acc + row.askQty, 0);

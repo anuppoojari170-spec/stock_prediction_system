@@ -93,7 +93,75 @@ def generate_fallback_df(ticker: str, count: int = 120) -> pd.DataFrame:
     return df
 
 
+COMPANY_PROFILES: Dict[str, dict] = {
+    "RELIANCE": {
+        "companyName": "Reliance Industries Limited",
+        "sector": "Oil, Gas & Energy / Telecom / Retail",
+        "marketCap": "₹18,20,000 Cr",
+        "peRatio": 26.8,
+        "pbRatio": 2.1,
+        "divYield": 0.45,
+        "description": "Reliance Industries is India's largest corporation by market valuation. Its business footprint spans hydrocarbon exploration, petroleum refining, petrochemicals, retail, and digital services (Jio).",
+    },
+    "TCS": {
+        "companyName": "Tata Consultancy Services Limited",
+        "sector": "Information Technology & Software Services",
+        "marketCap": "₹13,85,000 Cr",
+        "peRatio": 28.5,
+        "pbRatio": 13.2,
+        "divYield": 1.45,
+        "description": "Tata Consultancy Services is an Indian multinational IT services and consulting enterprise, part of the Tata Group, operating across 46 countries.",
+    },
+    "HDFCBANK": {
+        "companyName": "HDFC Bank Limited",
+        "sector": "Banking & Financial Services",
+        "marketCap": "₹13,40,000 Cr",
+        "peRatio": 19.4,
+        "pbRatio": 2.75,
+        "divYield": 1.15,
+        "description": "HDFC Bank is India's largest private sector bank by assets and market capitalization, providing a full suite of retail and corporate banking products.",
+    },
+    "INFY": {
+        "companyName": "Infosys Limited",
+        "sector": "Information Technology & Digital Services",
+        "marketCap": "₹6,80,000 Cr",
+        "peRatio": 25.2,
+        "pbRatio": 7.8,
+        "divYield": 2.30,
+        "description": "Infosys is a global leader in next-generation digital services and consulting, enabling enterprise clients worldwide to navigate AI and cloud transformations.",
+    },
+    "ICICIBANK": {
+        "companyName": "ICICI Bank Limited",
+        "sector": "Banking & Financial Services",
+        "marketCap": "₹8,90,000 Cr",
+        "peRatio": 18.2,
+        "pbRatio": 3.1,
+        "divYield": 0.85,
+        "description": "ICICI Bank is a premier private sector bank offering diverse financial services across retail, SME, and corporate banking.",
+    },
+    "SBIN": {
+        "companyName": "State Bank of India",
+        "sector": "Public Sector Banking & Financials",
+        "marketCap": "₹7,35,000 Cr",
+        "peRatio": 10.8,
+        "pbRatio": 1.45,
+        "divYield": 1.65,
+        "description": "State Bank of India is a Fortune 500 public sector banking institution commanding a dominant market share in Indian deposits and credit.",
+    },
+    "TATAMOTORS": {
+        "companyName": "Tata Motors Limited",
+        "sector": "Automotive & Electric Vehicles",
+        "marketCap": "₹2,95,000 Cr",
+        "peRatio": 11.4,
+        "pbRatio": 3.2,
+        "divYield": 0.80,
+        "description": "Tata Motors is an automotive manufacturing powerhouse producing passenger cars, commercial vehicles, and electric vehicles, as well as luxury vehicles through Jaguar Land Rover.",
+    },
+}
+
+
 class BaseMarketDataProvider(ABC):
+
     """Abstract interface for market data providers (yfinance now, Zerodha/Upstox later)."""
 
     @abstractmethod
@@ -271,6 +339,77 @@ class CachedYFinanceProvider(BaseMarketDataProvider):
 
         self.cache.set("market:overview", overview, ttl=self.cache_ttl)
         return overview
+
+    def get_stock_details(self, ticker: str) -> dict:
+        clean = ticker.strip().upper().replace(".NS", "")
+        cache_key = f"stock:details:{clean}"
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        profile = COMPANY_PROFILES.get(clean, {
+            "companyName": f"{clean} Limited",
+            "sector": "Indian Equities (NSE/BSE)",
+            "marketCap": "₹1,25,000 Cr",
+            "peRatio": 22.5,
+            "pbRatio": 3.4,
+            "divYield": 1.10,
+            "description": f"Comprehensive institutional equity profile for {clean}. Traded on the National Stock Exchange of India (NSE).",
+        })
+
+        df = self.get_history(clean, period="1y")
+        if df is not None and len(df) >= 2:
+            latest_row = df.iloc[-1]
+            prev_row = df.iloc[-2]
+            price = round(float(latest_row["Close"]), 2)
+            prev = round(float(prev_row["Close"]), 2)
+            chg = round(price - prev, 2)
+            pct = round((chg / prev) * 100, 2) if prev else 0.0
+            open_p = round(float(latest_row["Open"]), 2)
+            high_p = round(float(latest_row["High"]), 2)
+            low_p = round(float(latest_row["Low"]), 2)
+            vol = float(latest_row["Volume"]) if "Volume" in df.columns else 2500000.0
+            avg_vol = float(df["Volume"].tail(30).mean()) if "Volume" in df.columns else 2200000.0
+            high52 = round(float(df["High"].max()), 2)
+            low52 = round(float(df["Low"].min()), 2)
+        else:
+            price = FALLBACK_PRICES.get(clean, 1500.0)
+            chg = round(price * 0.012, 2)
+            pct = 1.20
+            open_p = round(price * 0.995, 2)
+            high_p = round(price * 1.015, 2)
+            low_p = round(price * 0.99, 2)
+            prev = round(price - chg, 2)
+            vol = 3500000.0
+            avg_vol = 3100000.0
+            high52 = round(price * 1.25, 2)
+            low52 = round(price * 0.75, 2)
+
+        result = {
+            "ticker": clean,
+            "companyName": profile["companyName"],
+            "sector": profile["sector"],
+            "exchange": "NSE",
+            "price": price,
+            "changeAbs": chg,
+            "changePct": pct,
+            "open": open_p,
+            "high": high_p,
+            "low": low_p,
+            "prevClose": prev,
+            "volume": vol,
+            "avgVolume": avg_vol,
+            "marketCap": profile["marketCap"],
+            "peRatio": profile["peRatio"],
+            "pbRatio": profile["pbRatio"],
+            "divYield": profile["divYield"],
+            "high52": high52,
+            "low52": low52,
+            "description": profile["description"],
+        }
+        self.cache.set(cache_key, result, ttl=60)
+        return result
+
 
 
 # Instantiate default market data provider

@@ -4,16 +4,19 @@ import {
   Holding,
   IndexItem,
   MoversResponse,
+  NewsItem,
   PortfolioSummary,
   Prediction,
   Quote,
   SentimentResponse,
+  StockDetails,
   Transaction,
   User,
   WatchlistItem,
   BacktestRequest,
   BacktestResponse,
 } from "../types";
+
 
 const api = axios.create({
   baseURL: "/api/v1",
@@ -65,7 +68,16 @@ export const marketApi = {
     const res = await api.get<Quote>(`/market/quote/${ticker}`);
     return res.data;
   },
+  getNews: async (limit = 12) => {
+    const res = await api.get<NewsItem[]>(`/market/news?limit=${limit}`);
+    return res.data;
+  },
+  getStockDetails: async (ticker: string) => {
+    const res = await api.get<StockDetails>(`/market/stock/${ticker}`);
+    return res.data;
+  },
 };
+
 
 // --- Prediction & Chart Endpoints ---
 export const predictionApi = {

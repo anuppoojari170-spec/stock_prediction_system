@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -9,131 +10,49 @@ import { OrderEntryPanel } from "../trading/OrderEntryPanel";
 import { MarketDepth } from "../trading/MarketDepth";
 import { SentimentGauge } from "../market/SentimentGauge";
 import { StockDetails } from "../../types";
-
-const stockDatabase: Record<string, StockDetails> = {
-  RELIANCE: {
-    ticker: "RELIANCE",
-    companyName: "Reliance Industries Limited",
-    sector: "Oil, Gas & Energy / Telecommunications / Retail",
-    exchange: "NSE",
-    price: 2984.50,
-    changeAbs: 38.20,
-    changePct: 1.30,
-    open: 2950.00,
-    high: 2992.40,
-    low: 2942.10,
-    prevClose: 2946.30,
-    volume: 6842100,
-    avgVolume: 5920000,
-    marketCap: "₹20,18,500 Cr",
-    peRatio: 28.4,
-    pbRatio: 2.35,
-    divYield: 0.35,
-    high52: 3217.90,
-    low52: 2220.30,
-    description:
-      "Reliance Industries is a Fortune 500 company and the largest private sector corporation in India. Its business footprint spans hydrocarbon exploration and production, petroleum refining and marketing, petrochemicals, retail, and digital services (Jio).",
-  },
-  TCS: {
-    ticker: "TCS",
-    companyName: "Tata Consultancy Services Limited",
-    sector: "Information Technology & Software Services",
-    exchange: "NSE",
-    price: 4120.75,
-    changeAbs: 45.30,
-    changePct: 1.11,
-    open: 4085.00,
-    high: 4135.00,
-    low: 4070.00,
-    prevClose: 4075.45,
-    volume: 2145800,
-    avgVolume: 1950000,
-    marketCap: "₹14,92,400 Cr",
-    peRatio: 31.2,
-    pbRatio: 14.8,
-    divYield: 1.25,
-    high52: 4585.00,
-    low52: 3313.00,
-    description:
-      "Tata Consultancy Services is an Indian multinational information technology services and consulting company headquartered in Mumbai. It is a part of the Tata Group and operates in 150 locations across 46 countries.",
-  },
-  HDFCBANK: {
-    ticker: "HDFCBANK",
-    companyName: "HDFC Bank Limited",
-    sector: "Banking & Financial Services",
-    exchange: "NSE",
-    price: 1742.30,
-    changeAbs: -8.40,
-    changePct: -0.48,
-    open: 1755.00,
-    high: 1758.50,
-    low: 1738.00,
-    prevClose: 1750.70,
-    volume: 12450000,
-    avgVolume: 14200000,
-    marketCap: "₹13,25,800 Cr",
-    peRatio: 19.8,
-    pbRatio: 2.85,
-    divYield: 1.12,
-    high52: 1794.00,
-    low52: 1363.55,
-    description:
-      "HDFC Bank Limited is the largest private sector bank in India by assets and world's tenth largest bank by market capitalization. It offers a comprehensive suite of banking products and services.",
-  },
-  INFY: {
-    ticker: "INFY",
-    companyName: "Infosys Limited",
-    sector: "Information Technology & Digital Services",
-    exchange: "NSE",
-    price: 1865.10,
-    changeAbs: 22.80,
-    changePct: 1.24,
-    open: 1845.00,
-    high: 1872.00,
-    low: 1840.50,
-    prevClose: 1842.30,
-    volume: 5410000,
-    avgVolume: 6100000,
-    marketCap: "₹7,74,500 Cr",
-    peRatio: 29.5,
-    pbRatio: 8.9,
-    divYield: 2.15,
-    high52: 1991.45,
-    low52: 1358.35,
-    description:
-      "Infosys is a global leader in next-generation digital services and consulting, enabling clients across 56 countries to navigate their digital transformation powered by Cloud and AI.",
-  },
-};
+import { marketApi } from "../../services/api";
 
 export const MarketsView: React.FC = () => {
-  const { activeTicker, exchange } = useAppStore();
+  const { activeTicker, exchange, liveTicks } = useAppStore();
 
-  const details = useMemo(() => {
-    return (
-      stockDatabase[activeTicker] || {
-        ticker: activeTicker,
-        companyName: `${activeTicker} Limited`,
-        sector: "Diversified Equities",
-        exchange,
-        price: 1540.00,
-        changeAbs: 18.50,
-        changePct: 1.22,
-        open: 1525.00,
-        high: 1548.00,
-        low: 1520.00,
-        prevClose: 1521.50,
-        volume: 3200000,
-        avgVolume: 2800000,
-        marketCap: "₹4,20,000 Cr",
-        peRatio: 24.5,
-        pbRatio: 3.8,
-        divYield: 1.05,
-        high52: 1720.00,
-        low52: 1180.00,
-        description: `Comprehensive institutional profile for ${activeTicker}. Traded actively on National Stock Exchange of India (NSE) and Bombay Stock Exchange (BSE).`,
-      }
-    );
-  }, [activeTicker, exchange]);
+  const liveTick = liveTicks[activeTicker.toUpperCase()];
+
+  const { data: serverDetails } = useQuery<StockDetails>({
+    queryKey: ["stockDetails", activeTicker],
+    queryFn: () => marketApi.getStockDetails(activeTicker),
+    staleTime: 30000,
+  });
+
+  const details: StockDetails = useMemo(() => {
+    const basePrice = liveTick?.price || serverDetails?.price || 1330.00;
+    const basePrev = liveTick?.price ? liveTick.price - liveTick.change : (serverDetails?.prevClose || basePrice * 0.99);
+    const chg = liveTick ? liveTick.change : (serverDetails ? serverDetails.changeAbs : basePrice - basePrev);
+    const pct = liveTick ? liveTick.change_pct : (serverDetails ? serverDetails.changePct : (chg / basePrev) * 100);
+
+    return {
+      ticker: activeTicker,
+      companyName: serverDetails?.companyName || `${activeTicker} Limited`,
+      sector: serverDetails?.sector || "Indian Equities (NSE)",
+      exchange,
+      price: liveTick?.price || serverDetails?.price || basePrice,
+      changeAbs: chg,
+      changePct: pct,
+      open: liveTick?.open || serverDetails?.open || basePrev,
+      high: liveTick ? Math.max(liveTick.high, serverDetails?.high || liveTick.high) : (serverDetails?.high || basePrice * 1.01),
+      low: liveTick ? Math.min(liveTick.low, serverDetails?.low || liveTick.low) : (serverDetails?.low || basePrice * 0.99),
+      prevClose: basePrev,
+      volume: liveTick?.volume || serverDetails?.volume || 3500000,
+      avgVolume: serverDetails?.avgVolume || 3100000,
+      marketCap: serverDetails?.marketCap || "₹1,25,000 Cr",
+      peRatio: serverDetails?.peRatio || 22.5,
+      pbRatio: serverDetails?.pbRatio || 3.2,
+      divYield: serverDetails?.divYield || 1.10,
+      high52: serverDetails?.high52 || basePrice * 1.25,
+      low52: serverDetails?.low52 || basePrice * 0.75,
+      description: serverDetails?.description || `Live institutional market profile for ${activeTicker} on National Stock Exchange of India (NSE).`,
+    };
+  }, [activeTicker, exchange, liveTick, serverDetails]);
+
 
   const isUp = details.changeAbs >= 0;
 
