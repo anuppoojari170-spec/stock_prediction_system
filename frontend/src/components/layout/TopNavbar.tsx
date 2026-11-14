@@ -14,6 +14,8 @@ import {
 import { useAppStore } from "../../store/useAppStore";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ExchangeType } from "../../types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { tradingApi } from "../../services/api";
 
 const popularStocks = [
   { ticker: "RELIANCE", name: "Reliance Industries Ltd", price: 1330.00, changePct: 1.15 },
@@ -46,6 +48,18 @@ export const TopNavbar: React.FC = () => {
   const activeTick = liveTicks[activeTicker?.toUpperCase()];
 
   const { user, openAuthModal, logout } = useAuthStore();
+  const queryClient = useQueryClient();
+  const { data: summary } = useQuery({
+    queryKey: ["portfolioSummary"],
+    queryFn: () => tradingApi.getSummary(),
+    enabled: Boolean(user),
+  });
+  const displayBalance = summary?.balance ?? user?.balance ?? virtualBalance;
+
+  const handleLogout = () => {
+    logout();
+    queryClient.clear();
+  };
 
   // Search flyout state
   const [searchOpen, setSearchOpen] = useState(false);
@@ -378,7 +392,7 @@ export const TopNavbar: React.FC = () => {
             </span>
             <span className="text-xs font-semibold text-[#F1F5FC]">
               ₹
-              {virtualBalance.toLocaleString("en-IN", {
+              {displayBalance.toLocaleString("en-IN", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -393,7 +407,7 @@ export const TopNavbar: React.FC = () => {
               {user.username.slice(0, 2).toUpperCase()}
             </div>
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="text-xs text-[#94A3B8] hover:text-[#F04452] transition-colors"
             >
               Logout

@@ -13,9 +13,11 @@ from app.schemas.trading import (
 )
 from app.services.trading import (
     buy_stock,
+    deposit_funds,
     get_portfolio_holdings,
     get_portfolio_summary,
     get_user_transactions,
+    reset_funds,
     sell_stock,
 )
 
@@ -78,4 +80,25 @@ def get_transactions(
 ):
     """Retrieve paginated transaction history for the authenticated user."""
     return get_user_transactions(user_id=current_user["id"], db=db, limit=limit)
+
+
+@router.post("/funds/deposit")
+def add_funds(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Deposit virtual cash into the authenticated user's trading account."""
+    amount = float(data.get("amount", 0))
+    return deposit_funds(user_id=current_user["id"], amount=amount, db=db)
+
+
+@router.post("/funds/reset")
+def reset_account_funds(
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Reset user's virtual margin balance back to default ₹10,00,000."""
+    return reset_funds(user_id=current_user["id"], db=db)
+
 

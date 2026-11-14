@@ -279,11 +279,19 @@ export interface WatchlistItem {
   ticker: string;
   companyName: string;
   pinned: boolean;
+  category?: string;
   price: number;
   change_abs: number;
   change_pct: number;
   volume: string;
   sparkline?: number[];
+  added_at?: string;
+}
+
+export interface WatchlistCategoryOut {
+  name: string;
+  count?: number;
+  created_at?: string;
 }
 
 export interface NewsItem {

@@ -36,18 +36,18 @@ export const MarketOverview: React.FC = () => {
 
   // Fallback movers if offline
   const displayGainers = movers?.gainers && movers.gainers.length > 0 ? movers.gainers : [
-    { ticker: "RELIANCE", price: 2984.50, change_pct: 1.30, company: "Reliance Industries", change_abs: 38.20, volume: "6.8M" },
-    { ticker: "TATAMOTORS", price: 988.40, change_pct: 1.29, company: "Tata Motors Limited", change_abs: 12.60, volume: "7.8M" },
-    { ticker: "INFY", price: 1865.10, change_pct: 1.24, company: "Infosys Limited", change_abs: 22.80, volume: "5.4M" },
-    { ticker: "ICICIBANK", price: 1268.90, change_pct: 1.16, company: "ICICI Bank Limited", change_abs: 14.50, volume: "8.9M" },
-    { ticker: "TCS", price: 4120.75, change_pct: 1.11, company: "Tata Consultancy Services", change_abs: 45.30, volume: "2.1M" },
+    { ticker: "RELIANCE", price: 1330.00, change_pct: 1.15, company: "Reliance Industries", change_abs: 15.20, volume: "6.8M" },
+    { ticker: "TATAMOTORS", price: 790.00, change_pct: 1.35, company: "Tata Motors Limited", change_abs: 10.60, volume: "7.8M" },
+    { ticker: "INFY", price: 1550.00, change_pct: 1.24, company: "Infosys Limited", change_abs: 18.80, volume: "5.4M" },
+    { ticker: "ICICIBANK", price: 1270.00, change_pct: 1.16, company: "ICICI Bank Limited", change_abs: 14.50, volume: "8.9M" },
+    { ticker: "TCS", price: 3700.00, change_pct: 0.95, company: "Tata Consultancy Services", change_abs: 35.30, volume: "2.1M" },
   ];
 
   const displayLosers = movers?.losers && movers.losers.length > 0 ? movers.losers : [
-    { ticker: "AXISBANK", price: 1195.40, change_pct: -0.65, company: "Axis Bank Limited", change_abs: -7.80, volume: "4.5M" },
-    { ticker: "SBIN", price: 818.40, change_pct: -0.50, company: "State Bank of India", change_abs: -4.10, volume: "9.2M" },
-    { ticker: "HDFCBANK", price: 1742.30, change_pct: -0.48, company: "HDFC Bank Limited", change_abs: -8.40, volume: "12.4M" },
-    { ticker: "WIPRO", price: 564.30, change_pct: -0.37, company: "Wipro Limited", change_abs: -2.10, volume: "4.1M" },
+    { ticker: "AXISBANK", price: 1180.00, change_pct: -0.65, company: "Axis Bank Limited", change_abs: -7.80, volume: "4.5M" },
+    { ticker: "SBIN", price: 820.00, change_pct: -0.50, company: "State Bank of India", change_abs: -4.10, volume: "9.2M" },
+    { ticker: "HDFCBANK", price: 1750.00, change_pct: -0.42, company: "HDFC Bank Limited", change_abs: -7.40, volume: "12.4M" },
+    { ticker: "WIPRO", price: 560.00, change_pct: -0.37, company: "Wipro Limited", change_abs: -2.10, volume: "4.1M" },
     { ticker: "COALINDIA", price: 432.10, change_pct: -0.28, company: "Coal India Limited", change_abs: -1.20, volume: "3.2M" },
   ];
 

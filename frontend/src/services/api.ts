@@ -113,24 +113,51 @@ export const tradingApi = {
     const res = await api.get<Transaction[]>(`/trading/transactions?limit=${limit}`);
     return res.data;
   },
+  depositFunds: async (amount: number) => {
+    const res = await api.post<{ message: string; balance: number }>("/trading/funds/deposit", { amount });
+    return res.data;
+  },
+  resetFunds: async () => {
+    const res = await api.post<{ message: string; balance: number }>("/trading/funds/reset");
+    return res.data;
+  },
 };
 
 // --- Watchlist Endpoints ---
 export const watchlistApi = {
-  getList: async () => {
-    const res = await api.get<WatchlistItem[]>("/watchlist");
+  getCategories: async () => {
+    const res = await api.get<{ name: string; count: number }[]>("/watchlist/categories");
     return res.data;
   },
-  add: async (ticker: string) => {
-    const res = await api.post("/watchlist", { ticker });
+  createCategory: async (name: string) => {
+    const res = await api.post("/watchlist/categories", { name });
     return res.data;
   },
-  remove: async (ticker: string) => {
-    const res = await api.delete(`/watchlist/${ticker}`);
+  deleteCategory: async (name: string) => {
+    const res = await api.delete(`/watchlist/categories/${encodeURIComponent(name)}`);
     return res.data;
   },
-  togglePin: async (ticker: string) => {
-    const res = await api.post(`/watchlist/${ticker}/pin`);
+  getList: async (category?: string) => {
+    const url = category ? `/watchlist?category=${encodeURIComponent(category)}` : "/watchlist";
+    const res = await api.get<WatchlistItem[]>(url);
+    return res.data;
+  },
+  add: async (ticker: string, category?: string) => {
+    const res = await api.post("/watchlist", { ticker, category: category || "Watchlist 1" });
+    return res.data;
+  },
+  remove: async (ticker: string, category?: string) => {
+    const url = category
+      ? `/watchlist/${ticker}?category=${encodeURIComponent(category)}`
+      : `/watchlist/${ticker}`;
+    const res = await api.delete(url);
+    return res.data;
+  },
+  togglePin: async (ticker: string, category?: string) => {
+    const url = category
+      ? `/watchlist/${ticker}/pin?category=${encodeURIComponent(category)}`
+      : `/watchlist/${ticker}/pin`;
+    const res = await api.post(url);
     return res.data;
   },
 };

@@ -276,59 +276,191 @@ def get_user_transactions(user_id: int, db: sqlite3.Connection, limit: int = 50)
     ]
 
 
-def get_user_watchlist(user_id: int, db: sqlite3.Connection) -> List[Dict[str, Any]]:
+def get_user_watchlist_categories(user_id: int, db: sqlite3.Connection) -> List[Dict[str, Any]]:
     cur = db.cursor()
-    cur.execute(
-        """
-        SELECT ticker, pinned, added_at
-        FROM watchlists
-        WHERE user_id = ?
-        ORDER BY pinned DESC, added_at ASC
-        """,
-        (user_id,)
-    )
-    return [
-        {"ticker": r["ticker"], "pinned": bool(r["pinned"]), "added_at": str(r["added_at"])}
-        for r in cur.fetchall()
-    ]
+    cur.execute("SELECT name FROM user_watchlists WHERE user_id = ? ORDER BY id ASC", (user_id,))
+    cats = [r["name"] for r in cur.fetchall()]
+
+    # Fetch distinct category names from watchlists
+    cur.execute("SELECT DISTINCT COALESCE(name, 'Watchlist 1') as name FROM watchlists WHERE user_id = ?", (user_id,))
+    for r in cur.fetchall():
+        if r["name"] and r["name"] not in cats:
+            cats.append(r["name"])
+
+    out = []
+    for cat in cats:
+        cur.execute(
+            "SELECT COUNT(*) as cnt FROM watchlists WHERE user_id = ? AND (name = ? OR (name IS NULL AND ? = 'Watchlist 1'))",
+            (user_id, cat, cat)
+        )
+        cnt = cur.fetchone()["cnt"]
+        out.append({"name": cat, "count": cnt})
+    return out
 
 
-def add_to_watchlist(user_id: int, ticker: str, db: sqlite3.Connection) -> None:
-    ticker = ticker.strip().upper().replace(".NS", "")
+def create_user_watchlist_category(user_id: int, name: str, db: sqlite3.Connection) -> None:
+    clean_name = name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Watchlist name cannot be empty.")
     with db:
         cur = db.cursor()
         cur.execute(
-            "INSERT INTO watchlists (user_id, ticker) VALUES (?, ?) ON CONFLICT (user_id, ticker) DO NOTHING",
-            (user_id, ticker)
+            "INSERT INTO user_watchlists (user_id, name) VALUES (?, ?) ON CONFLICT (user_id, name) DO NOTHING",
+            (user_id, clean_name)
         )
 
 
-def remove_from_watchlist(user_id: int, ticker: str, db: sqlite3.Connection) -> None:
+def delete_user_watchlist_category(user_id: int, name: str, db: sqlite3.Connection) -> None:
+    clean_name = name.strip()
+    with db:
+        cur = db.cursor()
+        cur.execute("DELETE FROM user_watchlists WHERE user_id = ? AND name = ?", (user_id, clean_name))
+        cur.execute(
+            "DELETE FROM watchlists WHERE user_id = ? AND (name = ? OR (name IS NULL AND ? = 'Watchlist 1'))",
+            (user_id, clean_name, clean_name)
+        )
+
+
+def get_user_watchlist(user_id: int, db: sqlite3.Connection, category: Optional[str] = None) -> List[Dict[str, Any]]:
+    cur = db.cursor()
+    if category:
+        cur.execute(
+            """
+            SELECT ticker, pinned, added_at, COALESCE(name, 'Watchlist 1') as name
+            FROM watchlists
+            WHERE user_id = ? AND (name = ? OR (name IS NULL AND ? = 'Watchlist 1'))
+            ORDER BY pinned DESC, added_at ASC
+            """,
+            (user_id, category, category)
+        )
+    else:
+        cur.execute(
+            """
+            SELECT ticker, pinned, added_at, COALESCE(name, 'Watchlist 1') as name
+            FROM watchlists
+            WHERE user_id = ?
+            ORDER BY pinned DESC, added_at ASC
+            """,
+            (user_id,)
+        )
+    results = []
+    for r in cur.fetchall():
+        ticker = r["ticker"]
+        try:
+            details = market_service.get_stock_details(ticker)
+            company_name = details.get("companyName", f"{ticker} Limited")
+            price = details.get("price", 1000.0)
+            change_abs = details.get("changeAbs", 0.0)
+            change_pct = details.get("changePct", 0.0)
+            volume = f"{round(details.get('volume', 2500000) / 1000000, 1)}M"
+        except Exception:
+            company_name = f"{ticker} Limited"
+            price = market_service.get_live_price(ticker) or 1000.0
+            change_abs = 0.0
+            change_pct = 0.0
+            volume = "2.5M"
+
+        results.append({
+            "ticker": ticker,
+            "pinned": bool(r["pinned"]),
+            "category": r["name"],
+            "companyName": company_name,
+            "price": price,
+            "change_abs": change_abs,
+            "change_pct": change_pct,
+            "volume": volume,
+            "added_at": str(r["added_at"]),
+        })
+    return results
+
+
+def add_to_watchlist(user_id: int, ticker: str, db: sqlite3.Connection, category: str = "Watchlist 1") -> None:
+    ticker = ticker.strip().upper().replace(".NS", "")
+    cat = category.strip() if category else "Watchlist 1"
+    with db:
+        cur = db.cursor()
+        # Ensure category is registered in user_watchlists
+        cur.execute(
+            "INSERT INTO user_watchlists (user_id, name) VALUES (?, ?) ON CONFLICT (user_id, name) DO NOTHING",
+            (user_id, cat)
+        )
+        cur.execute(
+            "INSERT INTO watchlists (user_id, name, ticker) VALUES (?, ?, ?) ON CONFLICT (user_id, name, ticker) DO NOTHING",
+            (user_id, cat, ticker)
+        )
+
+
+def remove_from_watchlist(user_id: int, ticker: str, db: sqlite3.Connection, category: Optional[str] = None) -> None:
     ticker = ticker.strip().upper().replace(".NS", "")
     with db:
         cur = db.cursor()
-        cur.execute(
-            "DELETE FROM watchlists WHERE user_id = ? AND ticker = ?",
-            (user_id, ticker)
-        )
+        if category:
+            cur.execute(
+                "DELETE FROM watchlists WHERE user_id = ? AND ticker = ? AND (name = ? OR (name IS NULL AND ? = 'Watchlist 1'))",
+                (user_id, ticker, category, category)
+            )
+        else:
+            cur.execute(
+                "DELETE FROM watchlists WHERE user_id = ? AND ticker = ?",
+                (user_id, ticker)
+            )
 
 
-def toggle_pin_watchlist(user_id: int, ticker: str, db: sqlite3.Connection) -> bool:
+def toggle_pin_watchlist(user_id: int, ticker: str, db: sqlite3.Connection, category: Optional[str] = None) -> bool:
     ticker = ticker.strip().upper().replace(".NS", "")
     with db:
         cur = db.cursor()
-        cur.execute(
-            "SELECT pinned FROM watchlists WHERE user_id = ? AND ticker = ?",
-            (user_id, ticker)
-        )
+        if category:
+            cur.execute(
+                "SELECT pinned FROM watchlists WHERE user_id = ? AND ticker = ? AND (name = ? OR (name IS NULL AND ? = 'Watchlist 1'))",
+                (user_id, ticker, category, category)
+            )
+        else:
+            cur.execute(
+                "SELECT pinned FROM watchlists WHERE user_id = ? AND ticker = ?",
+                (user_id, ticker)
+            )
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Symbol not in watchlist")
 
         new_pinned = 0 if row["pinned"] else 1
-        cur.execute(
-            "UPDATE watchlists SET pinned = ? WHERE user_id = ? AND ticker = ?",
-            (new_pinned, user_id, ticker)
-        )
+        if category:
+            cur.execute(
+                "UPDATE watchlists SET pinned = ? WHERE user_id = ? AND ticker = ? AND (name = ? OR (name IS NULL AND ? = 'Watchlist 1'))",
+                (new_pinned, user_id, ticker, category, category)
+            )
+        else:
+            cur.execute(
+                "UPDATE watchlists SET pinned = ? WHERE user_id = ? AND ticker = ?",
+                (new_pinned, user_id, ticker)
+            )
         return bool(new_pinned)
+
+
+def deposit_funds(user_id: int, amount: float, db: sqlite3.Connection) -> Dict[str, Any]:
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Deposit amount must be positive.")
+    with db:
+        cur = db.cursor()
+        cur.execute("UPDATE accounts SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
+        cur.execute("SELECT balance FROM accounts WHERE user_id = ?", (user_id,))
+        new_balance = cur.fetchone()["balance"]
+        cur.execute(
+            "INSERT INTO activities (user_id, message, category) VALUES (?, ?, 'deposit')",
+            (user_id, f"Deposited ₹{amount:,.2f} virtual margin into account.")
+        )
+    return {"message": f"Successfully deposited ₹{amount:,.2f}", "balance": float(new_balance)}
+
+
+def reset_funds(user_id: int, db: sqlite3.Connection) -> Dict[str, Any]:
+    with db:
+        cur = db.cursor()
+        cur.execute("UPDATE accounts SET balance = 1000000.0 WHERE user_id = ?", (user_id,))
+        cur.execute(
+            "INSERT INTO activities (user_id, message, category) VALUES (?, ?, 'reset')",
+            (user_id, "Reset account virtual balance to ₹10,00,000.00.")
+        )
+    return {"message": "Account balance successfully reset to ₹10,00,000.00", "balance": 1000000.0}
+
 

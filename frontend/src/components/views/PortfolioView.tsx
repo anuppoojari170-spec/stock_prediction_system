@@ -8,35 +8,6 @@ import { useAppStore } from "../../store/useAppStore";
 import { tradingApi } from "../../services/api";
 import { Holding } from "../../types";
 
-const fallbackHoldings: Holding[] = [
-  {
-    ticker: "RELIANCE",
-    companyName: "Reliance Industries Ltd",
-    shares: 50,
-    avg_price: 1310.00,
-    current_price: 1330.00,
-    invested: 65500.00,
-    current_value: 66500.00,
-    pnl: 1000.00,
-    pnl_pct: 1.53,
-    day_pnl: 750.00,
-    day_pnl_pct: 1.14,
-  },
-  {
-    ticker: "TCS",
-    companyName: "Tata Consultancy Services",
-    shares: 20,
-    avg_price: 3650.00,
-    current_price: 3700.00,
-    invested: 73000.00,
-    current_value: 74000.00,
-    pnl: 1000.00,
-    pnl_pct: 1.37,
-    day_pnl: 450.00,
-    day_pnl_pct: 0.61,
-  },
-];
-
 const defaultSectorBreakdown = [
   { name: "Information Technology", pct: 32.5, color: "#386BFF" },
   { name: "Banking & Financials", pct: 29.8, color: "#7657F6" },
@@ -56,7 +27,7 @@ export const PortfolioView: React.FC = () => {
     refetchInterval: 10000,
   });
 
-  const rawHoldings = serverHoldings !== undefined ? serverHoldings : fallbackHoldings;
+  const rawHoldings = serverHoldings || [];
 
   // Enriched with live WebSocket ticks
   const enrichedHoldings = useMemo(() => {
@@ -231,7 +202,14 @@ export const PortfolioView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#26354B]/30 font-mono-numbers">
-              {filteredHoldings.map((h) => {
+              {filteredHoldings.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-xs text-[#94A3B8]">
+                    No holdings in your portfolio yet. Buy stocks using the Order Entry Panel to build your positions.
+                  </td>
+                </tr>
+              ) : (
+                filteredHoldings.map((h) => {
                 const isPnlUp = h.pnl >= 0;
                 const isDayUp = (h.day_pnl || 0) >= 0;
 
@@ -298,7 +276,7 @@ export const PortfolioView: React.FC = () => {
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
         </div>

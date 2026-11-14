@@ -51,9 +51,26 @@ class TransactionOut(BaseModel):
 class WatchlistItem(BaseModel):
     ticker: str
     pinned: bool
+    category: Optional[str] = "Watchlist 1"
+    companyName: Optional[str] = None
+    price: Optional[float] = None
+    change_abs: Optional[float] = None
+    change_pct: Optional[float] = None
+    volume: Optional[str] = None
     added_at: Optional[str] = None
 
 
 class WatchlistCreate(BaseModel):
     ticker: str = Field(..., min_length=1, max_length=20)
+    category: Optional[str] = Field("Watchlist 1", max_length=100)
+
+
+class WatchlistCategoryCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+
+
+class WatchlistCategoryOut(BaseModel):
+    name: str
+    count: int = 0
+
 

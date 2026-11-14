@@ -157,15 +157,25 @@ def init_db() -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 
+        CREATE TABLE IF NOT EXISTS user_watchlists (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(100) NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_watchlists_user ON user_watchlists(user_id);
+
         CREATE TABLE IF NOT EXISTS watchlists (
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(100) DEFAULT 'Watchlist 1',
             ticker VARCHAR(50) NOT NULL,
             pinned INTEGER DEFAULT 0,
             added_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, ticker)
+            UNIQUE(user_id, name, ticker)
         );
-        CREATE INDEX IF NOT EXISTS idx_watchlists_user_ticker ON watchlists(user_id, ticker);
+        CREATE INDEX IF NOT EXISTS idx_watchlists_user_ticker ON watchlists(user_id, name, ticker);
 
         CREATE TABLE IF NOT EXISTS activities (
             id SERIAL PRIMARY KEY,
@@ -238,17 +248,30 @@ def init_db() -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)")
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS watchlists (
+    CREATE TABLE IF NOT EXISTS user_watchlists (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
-        ticker TEXT NOT NULL,
-        pinned INTEGER DEFAULT 0,
-        added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, ticker),
+        name TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, name),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
     """)
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_watchlists_user_ticker ON watchlists(user_id, ticker)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_user_watchlists_user ON user_watchlists(user_id)")
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS watchlists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name TEXT DEFAULT 'Watchlist 1',
+        ticker TEXT NOT NULL,
+        pinned INTEGER DEFAULT 0,
+        added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, name, ticker),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_watchlists_user_name_ticker ON watchlists(user_id, name, ticker)")
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS activities (
@@ -264,6 +287,63 @@ def init_db() -> None:
 
     conn.commit()
     conn.close()
+
+    # Synchronize user accounts across SQLite & Supabase to guarantee cross-session persistence
+    sync_user_databases()
+
+
+def sync_user_databases():
+    """Synchronizes user accounts and credentials bidirectionally between Supabase and local SQLite."""
+    try:
+        if not is_postgres():
+            return
+        # Open local SQLite
+        conn_sql = sqlite3.connect(settings.DB_PATH, timeout=10.0)
+        conn_sql.row_factory = sqlite3.Row
+        cur_sql = conn_sql.cursor()
+
+        # Open Postgres
+        conn_pg = psycopg2.connect(settings.DATABASE_URL, connect_timeout=8)
+        cur_pg = conn_pg.cursor(cursor_factory=RealDictCursor)
+
+        # 1. Fetch from SQLite
+        cur_sql.execute("SELECT email, username, full_name, password_hash FROM users")
+        sql_users = [dict(r) for r in cur_sql.fetchall()]
+
+        # 2. Fetch from Postgres
+        cur_pg.execute("SELECT email, username, full_name, password_hash FROM users")
+        pg_users = cur_pg.fetchall()
+
+        pg_usernames = {u["username"].lower() for u in pg_users}
+        sql_usernames = {u["username"].lower() for u in sql_users}
+
+        # Sync SQLite -> Postgres
+        for u in sql_users:
+            if u["username"].lower() not in pg_usernames:
+                cur_pg.execute(
+                    "INSERT INTO users (email, username, full_name, password_hash) VALUES (%s, %s, %s, %s) RETURNING id",
+                    (u["email"].lower(), u["username"].lower(), u["full_name"], u["password_hash"])
+                )
+                new_id = cur_pg.fetchone()["id"]
+                cur_pg.execute("INSERT INTO accounts (user_id, balance, currency) VALUES (%s, %s, %s)", (new_id, settings.STARTING_BALANCE, "INR"))
+                conn_pg.commit()
+
+        # Sync Postgres -> SQLite
+        for u in pg_users:
+            if u["username"].lower() not in sql_usernames:
+                cur_sql.execute(
+                    "INSERT INTO users (email, username, full_name, password_hash) VALUES (?, ?, ?, ?)",
+                    (u["email"].lower(), u["username"].lower(), u["full_name"], u["password_hash"])
+                )
+                cur_sql.execute("SELECT id FROM users WHERE LOWER(username) = ?", (u["username"].lower(),))
+                new_id = cur_sql.fetchone()["id"]
+                cur_sql.execute("INSERT INTO accounts (user_id, balance, currency) VALUES (?, ?, ?)", (new_id, settings.STARTING_BALANCE, "INR"))
+                conn_sql.commit()
+
+        conn_sql.close()
+        conn_pg.close()
+    except Exception:
+        pass
 
 
 def get_db():

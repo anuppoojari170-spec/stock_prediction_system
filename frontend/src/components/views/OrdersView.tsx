@@ -1,20 +1,67 @@
-import React, { useState } from "react";
-import { FileText, ArrowUpRight, ArrowDownRight, Search } from "lucide-react";
-import { useAppStore } from "../../store/useAppStore";
-import { OrderStatus } from "../../types";
+import React, { useState, useMemo } from "react";
+import { FileText, ArrowUpRight, ArrowDownRight, Search, RefreshCw } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { tradingApi } from "../../services/api";
+import { OrderItem, OrderStatus } from "../../types";
 
 export const OrdersView: React.FC = () => {
-  const { orders, cancelOrder } = useAppStore();
   const [activeTab, setActiveTab] = useState<"ALL" | OrderStatus>("ALL");
   const [search, setSearch] = useState("");
 
-  const filteredOrders = orders.filter((o) => {
-    const matchesTab = activeTab === "ALL" || o.status === activeTab;
-    const matchesSearch =
-      o.ticker.toLowerCase().includes(search.toLowerCase()) ||
-      o.id.toLowerCase().includes(search.toLowerCase());
-    return matchesTab && matchesSearch;
+  const {
+    data: transactions = [],
+    isLoading,
+    refetch,
+    isRefetching,
+  } = useQuery({
+    queryKey: ["userTransactions"],
+    queryFn: () => tradingApi.getTransactions(100),
+    refetchInterval: 10000,
   });
+
+  const orders: OrderItem[] = useMemo(() => {
+    return transactions.map((t) => {
+      let timeStr = "Recently";
+      if (t.timestamp) {
+        try {
+          const d = new Date(t.timestamp);
+          timeStr = d.toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+          }) + " " + d.toLocaleTimeString("en-IN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        } catch {
+          timeStr = t.timestamp;
+        }
+      }
+
+      return {
+        id: `ORD-${t.id.toString().padStart(5, "0")}`,
+        ticker: t.ticker,
+        exchange: "NSE",
+        side: (t.type?.toUpperCase() === "SELL" ? "SELL" : "BUY") as "BUY" | "SELL",
+        product: "CNC",
+        orderType: "MARKET",
+        quantity: t.quantity,
+        filledQuantity: t.quantity,
+        price: t.price,
+        status: "EXECUTED" as OrderStatus,
+        timestamp: timeStr,
+      };
+    });
+  }, [transactions]);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const matchesTab = activeTab === "ALL" || o.status === activeTab;
+      const matchesSearch =
+        o.ticker.toLowerCase().includes(search.toLowerCase()) ||
+        o.id.toLowerCase().includes(search.toLowerCase());
+      return matchesTab && matchesSearch;
+    });
+  }, [orders, activeTab, search]);
 
   const getStatusBadge = (status: OrderStatus) => {
     switch (status) {
@@ -41,6 +88,13 @@ export const OrdersView: React.FC = () => {
             <h3 className="font-heading font-bold text-base text-[#F1F5FC]">
               Order Book & Trade Execution Logs ({filteredOrders.length})
             </h3>
+            <button
+              onClick={() => refetch()}
+              className="p-1 rounded text-[#94A3B8] hover:text-[#386BFF] hover:bg-[#1A2940] transition-colors"
+              title="Refresh Orders"
+            >
+              <RefreshCw size={14} className={isRefetching ? "animate-spin" : ""} />
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -58,10 +112,10 @@ export const OrdersView: React.FC = () => {
 
             {/* Status Filter Tabs */}
             <div className="flex items-center space-x-1 p-0.5 bg-[#0B1120] rounded border border-[#26354B] text-xs font-medium">
-              {(["ALL", "OPEN", "EXECUTED", "REJECTED", "CANCELLED"] as const).map((tab) => (
+              {(["ALL", "EXECUTED", "OPEN", "CANCELLED"] as const).map((tab) => (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => setActiveTab(tab as any)}
                   className={`px-2.5 py-1 rounded transition-colors ${
                     activeTab === tab
                       ? "bg-[#386BFF] text-white"
@@ -75,7 +129,7 @@ export const OrdersView: React.FC = () => {
           </div>
         </div>
 
-        {/* Table */}
+        {/* Orders Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
@@ -90,11 +144,16 @@ export const OrdersView: React.FC = () => {
                 <th className="py-2.5 px-3 text-right">Quantity</th>
                 <th className="py-2.5 px-3 text-right">Price</th>
                 <th className="py-2.5 px-3 text-center">Status</th>
-                <th className="py-2.5 px-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#26354B]/30 font-mono-numbers">
-              {filteredOrders.length > 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={10} className="py-8 text-center text-xs text-[#94A3B8]">
+                    Loading execution logs from exchange...
+                  </td>
+                </tr>
+              ) : filteredOrders.length > 0 ? (
                 filteredOrders.map((order) => {
                   const isBuy = order.side === "BUY";
 
@@ -124,7 +183,7 @@ export const OrdersView: React.FC = () => {
                       </td>
                       <td className="py-2.5 px-3">
                         <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#1A2940] text-[#F1F5FC]">
-                          {order.product === "CNC" ? "Delivery (CNC)" : "Intraday (MIS)"}
+                          Delivery (CNC)
                         </span>
                       </td>
                       <td className="py-2.5 px-3 text-[#94A3B8]">
@@ -145,25 +204,13 @@ export const OrdersView: React.FC = () => {
                           {order.status}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-right">
-                        {order.status === "OPEN" ? (
-                          <button
-                            onClick={() => cancelOrder(order.id)}
-                            className="px-2 py-1 rounded bg-[#F04452]/20 hover:bg-[#F04452] text-[#F04452] hover:text-white text-[10px] font-semibold border border-[#F04452]/40 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-[#64748B]">—</span>
-                        )}
-                      </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-xs text-[#94A3B8]">
-                    No orders found matching the selected filter criteria.
+                  <td colSpan={10} className="py-8 text-center text-xs text-[#94A3B8]">
+                    No trade executions recorded yet. Execute a trade using the Order Entry Panel.
                   </td>
                 </tr>
               )}

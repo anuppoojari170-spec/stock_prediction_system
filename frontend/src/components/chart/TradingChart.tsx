@@ -347,6 +347,12 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
     const lastCandle = candlesData[candlesData.length - 1];
     if (!lastCandle) return;
 
+    // Plausibility safeguard: if live tick deviates by >25% from last candle close (e.g. bonus/split mismatch or outlier),
+    // ignore it to prevent stretching the candlestick or breaking chart scale
+    if (Math.abs(liveTick.price - lastCandle.close) / lastCandle.close > 0.25) {
+      return;
+    }
+
     const newHigh = Math.max(lastCandle.high, liveTick.price);
     const newLow = Math.min(lastCandle.low, liveTick.price);
 
@@ -372,12 +378,23 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
 
   const latestCandle = candlesData[candlesData.length - 1];
   const prevCandle = candlesData[candlesData.length - 2];
-  // Price priority: live WebSocket tick → last real candle close → 0 (loading state)
-  const currentPrice = liveTick
-    ? liveTick.price
+  
+  // Plausibility check for header price display
+  const isLiveTickConsistent =
+    Boolean(
+      liveTick &&
+      latestCandle &&
+      Math.abs(liveTick.price - latestCandle.close) / latestCandle.close <= 0.25
+    );
+
+  // Price priority: consistent live WebSocket tick → last real candle close → live tick → 0
+  const currentPrice = isLiveTickConsistent
+    ? liveTick!.price
     : latestCandle
       ? latestCandle.close
-      : 0;
+      : liveTick
+        ? liveTick.price
+        : 0;
   const dayChange = liveTick
     ? liveTick.change
     : prevCandle && latestCandle

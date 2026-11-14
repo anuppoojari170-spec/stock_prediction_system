@@ -1,10 +1,39 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Layers } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { tradingApi } from "../../services/api";
 import { useAppStore } from "../../store/useAppStore";
+import { Holding } from "../../types";
 
 export const PositionsView: React.FC = () => {
-  const { positions, squareOffPosition, liveTicks } = useAppStore();
+  const { liveTicks, setActiveTicker, setOrderSide, setActiveTab } = useAppStore();
   const [filterTab, setFilterTab] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
+
+  const { data: holdings = [] } = useQuery<Holding[]>({
+    queryKey: ["portfolioHoldingsList"],
+    queryFn: tradingApi.getPortfolio,
+    refetchInterval: 10000,
+  });
+
+  const positions = useMemo(() => {
+    return holdings.map((h) => {
+      const live = liveTicks[h.ticker.toUpperCase()];
+      const ltp = live ? live.price : (h.current_price || h.avg_price);
+      const unrealizedPnl = Math.round((ltp - h.avg_price) * h.shares * 100) / 100;
+      return {
+        id: `POS-${h.ticker}`,
+        ticker: h.ticker,
+        product: "CNC",
+        quantity: h.shares,
+        buyPrice: h.avg_price,
+        ltp,
+        realizedPnl: 0,
+        unrealizedPnl,
+        netPnl: unrealizedPnl,
+        status: "OPEN" as "OPEN" | "CLOSED",
+      };
+    });
+  }, [holdings, liveTicks]);
 
   const filteredPositions = positions.filter((p) => {
     if (filterTab === "OPEN") return p.status === "OPEN";
@@ -16,10 +45,7 @@ export const PositionsView: React.FC = () => {
     .filter((p) => p.status === "OPEN")
     .reduce((acc, p) => acc + p.unrealizedPnl, 0);
 
-  const totalRealized = positions
-    .filter((p) => p.status === "CLOSED")
-    .reduce((acc, p) => acc + p.realizedPnl, 0);
-
+  const totalRealized = 0;
   const netPnl = totalUnrealized + totalRealized;
   const isNetPositive = netPnl >= 0;
 
@@ -53,12 +79,8 @@ export const PositionsView: React.FC = () => {
 
         <div className="nexus-card p-4">
           <span className="text-xs text-[#94A3B8]">Realized P&L</span>
-          <div
-            className={`text-2xl font-bold font-mono-numbers mt-1 ${
-              totalRealized >= 0 ? "text-[#00C087]" : "text-[#F04452]"
-            }`}
-          >
-            {totalRealized >= 0 ? "+" : ""}₹{totalRealized.toFixed(2)}
+          <div className="text-2xl font-bold font-mono-numbers mt-1 text-[#94A3B8]">
+            ₹0.00
           </div>
           <span className="text-[11px] text-[#94A3B8] mt-1 block">Squared Off Today</span>
         </div>
@@ -106,85 +128,64 @@ export const PositionsView: React.FC = () => {
                 <th className="py-2 px-3 text-right">Avg. Buy</th>
                 <th className="py-2 px-3 text-right">LTP</th>
                 <th className="py-2 px-3 text-right">Unrealized P&L</th>
-                <th className="py-2 px-3 text-right">Realized P&L</th>
                 <th className="py-2 px-3 text-right">Net P&L</th>
                 <th className="py-2 px-3 text-center">Status / Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#26354B]/30 font-mono-numbers">
-              {filteredPositions.map((pos) => {
-                const isOpen = pos.status === "OPEN";
-                const isNetUp = (isOpen ? pos.unrealizedPnl : pos.realizedPnl) >= 0;
+              {filteredPositions.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-xs text-[#94A3B8]">
+                    No open positions currently active.
+                  </td>
+                </tr>
+              ) : (
+                filteredPositions.map((pos) => {
+                  const isNetUp = pos.unrealizedPnl >= 0;
 
-                return (
-                  <tr key={pos.id} className="hover:bg-[#1A2940]/40 transition-colors">
-                    <td className="py-2.5 px-3">
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1A2940] text-[#386BFF]">
-                        {pos.product}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 font-bold text-[#F1F5FC]">{pos.ticker}</td>
-                    <td className="py-2.5 px-3 text-right font-medium text-[#F1F5FC]">
-                      {pos.quantity}
-                    </td>
-                    <td className="py-2.5 px-3 text-right text-[#94A3B8]">
-                      ₹{pos.buyPrice.toFixed(2)}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-semibold text-[#F1F5FC]">
-                      <span
-                        key={`${pos.id}-${pos.ltp}`}
-                        className={`px-1 py-0.5 rounded transition-colors ${
-                          liveTicks[pos.ticker.toUpperCase()]?.direction === "up"
-                            ? "flash-up text-[#00C087]"
-                            : liveTicks[pos.ticker.toUpperCase()]?.direction === "down"
-                            ? "flash-down text-[#F04452]"
-                            : ""
-                        }`}
-                      >
+                  return (
+                    <tr key={pos.id} className="hover:bg-[#1A2940]/40 transition-colors">
+                      <td className="py-2.5 px-3">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1A2940] text-[#386BFF]">
+                          {pos.product}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-[#F1F5FC]">{pos.ticker}</td>
+                      <td className="py-2.5 px-3 text-right font-medium text-[#F1F5FC]">
+                        {pos.quantity}
+                      </td>
+                      <td className="py-2.5 px-3 text-right text-[#94A3B8]">
+                        ₹{pos.buyPrice.toFixed(2)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-semibold text-[#F1F5FC]">
                         ₹{pos.ltp.toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      {isOpen ? (
-                        <span className={pos.unrealizedPnl >= 0 ? "text-[#00C087]" : "text-[#F04452]"}>
-                          {pos.unrealizedPnl >= 0 ? "+" : ""}₹{pos.unrealizedPnl.toFixed(2)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-bold">
+                        <span className={isNetUp ? "text-[#00C087]" : "text-[#F04452]"}>
+                          {isNetUp ? "+" : ""}₹{pos.unrealizedPnl.toFixed(2)}
                         </span>
-                      ) : (
-                        <span className="text-[#64748B]">—</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      {!isOpen ? (
-                        <span className={pos.realizedPnl >= 0 ? "text-[#00C087]" : "text-[#F04452]"}>
-                          {pos.realizedPnl >= 0 ? "+" : ""}₹{pos.realizedPnl.toFixed(2)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-bold">
+                        <span className={isNetUp ? "text-[#00C087]" : "text-[#F04452]"}>
+                          {isNetUp ? "+" : ""}₹{pos.netPnl.toFixed(2)}
                         </span>
-                      ) : (
-                        <span className="text-[#64748B]">₹0.00</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-bold">
-                      <span className={isNetUp ? "text-[#00C087]" : "text-[#F04452]"}>
-                        {isNetUp ? "+" : ""}₹
-                        {(isOpen ? pos.unrealizedPnl : pos.realizedPnl).toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-sans">
-                      {isOpen ? (
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
                         <button
-                          onClick={() => squareOffPosition(pos.id)}
-                          className="px-2.5 py-1 rounded bg-[#F04452]/20 hover:bg-[#F04452] text-[#F04452] hover:text-white text-[11px] font-semibold border border-[#F04452]/40 transition-all"
+                          onClick={() => {
+                            setActiveTicker(pos.ticker);
+                            setOrderSide("SELL");
+                            setActiveTab("overview");
+                          }}
+                          className="px-2.5 py-1 rounded bg-[#F04452]/20 hover:bg-[#F04452] text-[#F04452] hover:text-white text-[10px] font-semibold border border-[#F04452]/40 transition-colors"
                         >
-                          Square Off
+                          Exit Position
                         </button>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#64748B]/20 text-[#94A3B8]">
-                          CLOSED
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

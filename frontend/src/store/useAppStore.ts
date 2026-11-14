@@ -43,7 +43,7 @@ interface AppState {
   usedMargin: number;
 
   // Custom watchlists
-  watchlistCategory: "NIFTY 50" | "Banking" | "IT" | "My Watchlist";
+  watchlistCategory: string;
   watchlists: Record<string, WatchlistItem[]>;
 
   // Real-time market streaming state
@@ -87,107 +87,13 @@ interface AppState {
   removeFromWatchlist: (ticker: string) => void;
 }
 
-// Initial Indian Stock Market Watchlists
-const defaultWatchlists: Record<string, WatchlistItem[]> = {
-  "NIFTY 50": [
-    { ticker: "RELIANCE", companyName: "Reliance Industries Ltd", pinned: true, price: 1330.00, change_abs: 15.20, change_pct: 1.15, volume: "6.8M", sparkline: [1310, 1318, 1322, 1328, 1330] },
-    { ticker: "TCS", companyName: "Tata Consultancy Services", pinned: true, price: 3700.00, change_abs: 35.30, change_pct: 0.95, volume: "2.1M", sparkline: [3650, 3670, 3685, 3690, 3700] },
-    { ticker: "HDFCBANK", companyName: "HDFC Bank Limited", pinned: true, price: 1750.00, change_abs: -7.40, change_pct: -0.42, volume: "12.4M", sparkline: [1765, 1760, 1755, 1748, 1750] },
-    { ticker: "INFY", companyName: "Infosys Limited", pinned: false, price: 1550.00, change_abs: 18.80, change_pct: 1.24, volume: "5.4M", sparkline: [1530, 1535, 1542, 1548, 1550] },
-    { ticker: "ICICIBANK", companyName: "ICICI Bank Limited", pinned: false, price: 1270.00, change_abs: 14.50, change_pct: 1.16, volume: "8.9M", sparkline: [1252, 1258, 1262, 1265, 1270] },
-    { ticker: "BHARTIARTL", companyName: "Bharti Airtel Limited", pinned: false, price: 1600.00, change_abs: 6.20, change_pct: 0.39, volume: "3.7M", sparkline: [1588, 1590, 1592, 1598, 1600] },
-    { ticker: "SBIN", companyName: "State Bank of India", pinned: false, price: 820.00, change_abs: -4.10, change_pct: -0.50, volume: "9.2M", sparkline: [826, 824, 822, 818, 820] },
-    { ticker: "ITC", companyName: "ITC Limited", pinned: false, price: 460.00, change_abs: 1.95, change_pct: 0.41, volume: "7.1M", sparkline: [456, 458, 459, 460, 460] },
-  ],
-  "Banking": [
-    { ticker: "HDFCBANK", companyName: "HDFC Bank Limited", pinned: true, price: 1750.00, change_abs: -7.40, change_pct: -0.42, volume: "12.4M", sparkline: [1765, 1760, 1755, 1748, 1750] },
-    { ticker: "ICICIBANK", companyName: "ICICI Bank Limited", pinned: true, price: 1270.00, change_abs: 14.50, change_pct: 1.16, volume: "8.9M", sparkline: [1252, 1258, 1262, 1265, 1270] },
-    { ticker: "SBIN", companyName: "State Bank of India", pinned: true, price: 820.00, change_abs: -4.10, change_pct: -0.50, volume: "9.2M", sparkline: [826, 824, 822, 818, 820] },
-    { ticker: "KOTAKBANK", companyName: "Kotak Mahindra Bank", pinned: false, price: 1850.00, change_abs: 5.60, change_pct: 0.31, volume: "3.1M", sparkline: [1840, 1845, 1848, 1852, 1850] },
-    { ticker: "AXISBANK", companyName: "Axis Bank Limited", pinned: false, price: 1180.00, change_abs: -7.80, change_pct: -0.65, volume: "4.5M", sparkline: [1192, 1188, 1185, 1178, 1180] },
-  ],
-  "IT": [
-    { ticker: "TCS", companyName: "Tata Consultancy Services", pinned: true, price: 3700.00, change_abs: 35.30, change_pct: 0.95, volume: "2.1M", sparkline: [3650, 3670, 3685, 3690, 3700] },
-    { ticker: "INFY", companyName: "Infosys Limited", pinned: true, price: 1550.00, change_abs: 18.80, change_pct: 1.24, volume: "5.4M", sparkline: [1530, 1535, 1542, 1548, 1550] },
-    { ticker: "HCLTECH", companyName: "HCL Technologies Ltd", pinned: false, price: 1800.00, change_abs: 18.40, change_pct: 1.02, volume: "2.8M", sparkline: [1780, 1785, 1792, 1798, 1800] },
-    { ticker: "WIPRO", companyName: "Wipro Limited", pinned: false, price: 560.00, change_abs: -2.10, change_pct: -0.37, volume: "4.1M", sparkline: [565, 564, 562, 558, 560] },
-  ],
-  "My Watchlist": [
-    { ticker: "RELIANCE", companyName: "Reliance Industries Ltd", pinned: true, price: 1330.00, change_abs: 15.20, change_pct: 1.15, volume: "6.8M", sparkline: [1310, 1318, 1322, 1328, 1330] },
-    { ticker: "TATAMOTORS", companyName: "Tata Motors Limited", pinned: true, price: 790.00, change_abs: 10.60, change_pct: 1.35, volume: "7.8M", sparkline: [778, 782, 785, 788, 790] },
-    { ticker: "LTIM", companyName: "LTIMindtree Limited", pinned: false, price: 5700.00, change_abs: 65.00, change_pct: 1.15, volume: "850K", sparkline: [5620, 5650, 5680, 5690, 5700] },
-  ],
-};
+// Empty watchlists container — completely driven by authenticated user's custom lists
+const defaultWatchlists: Record<string, WatchlistItem[]> = {};
 
 
-const initialOrders: OrderItem[] = [
-  {
-    id: "ORD-89410",
-    ticker: "RELIANCE",
-    exchange: "NSE",
-    side: "BUY",
-    product: "CNC",
-    orderType: "MARKET",
-    quantity: 25,
-    filledQuantity: 25,
-    price: 2975.00,
-    status: "EXECUTED",
-    timestamp: "Today, 10:42 AM",
-  },
-  {
-    id: "ORD-89408",
-    ticker: "TCS",
-    exchange: "NSE",
-    side: "BUY",
-    product: "CNC",
-    orderType: "LIMIT",
-    quantity: 15,
-    filledQuantity: 15,
-    price: 4095.00,
-    status: "EXECUTED",
-    timestamp: "Today, 09:35 AM",
-  },
-  {
-    id: "ORD-89401",
-    ticker: "INFY",
-    exchange: "NSE",
-    side: "BUY",
-    product: "MIS",
-    orderType: "LIMIT",
-    quantity: 50,
-    filledQuantity: 0,
-    price: 1850.00,
-    status: "OPEN",
-    timestamp: "Today, 09:18 AM",
-  },
-];
+const initialOrders: OrderItem[] = [];
 
-const initialPositions: PositionItem[] = [
-  {
-    id: "POS-101",
-    ticker: "INFY",
-    product: "MIS",
-    quantity: 50,
-    buyPrice: 1852.00,
-    ltp: 1865.10,
-    realizedPnl: 0,
-    unrealizedPnl: 655.00,
-    netPnl: 655.00,
-    status: "OPEN",
-  },
-  {
-    id: "POS-102",
-    ticker: "SBIN",
-    product: "MIS",
-    quantity: 100,
-    buyPrice: 822.50,
-    ltp: 818.40,
-    realizedPnl: 0,
-    unrealizedPnl: -410.00,
-    netPnl: -410.00,
-    status: "OPEN",
-  },
-];
+const initialPositions: PositionItem[] = [];
 
 export const useAppStore = create<AppState>((set, get) => {
   // Read persisted preferences
@@ -219,8 +125,8 @@ export const useAppStore = create<AppState>((set, get) => {
     orderType: "MARKET",
     productType: "CNC",
     orderQty: 10,
-    orderPrice: 2984.50,
-    triggerPrice: 2950.00,
+    orderPrice: 1330.00,
+    triggerPrice: 1320.00,
     isConfirmModalOpen: false,
 
     orders: initialOrders,
@@ -228,7 +134,7 @@ export const useAppStore = create<AppState>((set, get) => {
     virtualBalance: savedBalance,
     usedMargin: 125400,
 
-    watchlistCategory: "NIFTY 50",
+    watchlistCategory: "Watchlist 1",
     watchlists: defaultWatchlists,
 
     // Real-time market streaming state

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Sidebar } from "./components/layout/Sidebar";
 import { TopNavbar } from "./components/layout/TopNavbar";
@@ -14,6 +14,7 @@ import { NewsView } from "./components/views/NewsView";
 import { AnalyticsView } from "./components/views/AnalyticsView";
 import { SettingsView } from "./components/views/SettingsView";
 import { AuthModal } from "./components/auth/AuthModal";
+import { LoginPage } from "./components/auth/LoginPage";
 import { useAppStore } from "./store/useAppStore";
 import { useAuthStore } from "./store/useAuthStore";
 import { authApi } from "./services/api";
@@ -30,23 +31,9 @@ const queryClient = new QueryClient({
 
 const DashboardContent: React.FC = () => {
   const { activeTab, isSidebarCollapsed } = useAppStore();
-  const { token, setUser } = useAuthStore();
 
   // Initialize and run real-time sub-second market data stream
   useMarketStream();
-
-  // Restore authenticated user session on mount
-
-  useEffect(() => {
-    if (token) {
-      authApi
-        .getMe()
-        .then((userData) => setUser(userData))
-        .catch(() => {
-          localStorage.removeItem("tradepilot_token");
-        });
-    }
-  }, [token, setUser]);
 
   // Route to active view
   const renderActiveView = () => {
@@ -100,16 +87,66 @@ const DashboardContent: React.FC = () => {
         </main>
       </div>
 
-      {/* Global Authentication Modal */}
+      {/* Global Authentication Modal (for switching or re-authenticating) */}
       <AuthModal />
     </div>
   );
 };
 
+const MainApp: React.FC = () => {
+  const { token, user, setUser, setToken } = useAuthStore();
+  const [isVerifying, setIsVerifying] = useState<boolean>(Boolean(token && !user));
+
+  useEffect(() => {
+    if (token && !user) {
+      setIsVerifying(true);
+      authApi
+        .getMe()
+        .then((userData) => {
+          setUser(userData);
+          setIsVerifying(false);
+        })
+        .catch(() => {
+          setToken(null);
+          setUser(null);
+          setIsVerifying(false);
+        });
+    } else if (!token) {
+      setIsVerifying(false);
+    }
+  }, [token, user, setUser, setToken]);
+
+  // Loading spinner while verifying existing token
+  if (isVerifying) {
+    return (
+      <div className="min-h-screen bg-[#0B1120] flex flex-col items-center justify-center text-[#F1F5FC] select-none">
+        <div className="w-10 h-10 border-4 border-[#386BFF]/25 border-t-[#386BFF] rounded-full animate-spin mb-4" />
+        <span className="text-xs font-mono text-[#94A3B8]">
+          Authenticating Trade AI Pilot Session...
+        </span>
+      </div>
+    );
+  }
+
+  // Not authenticated: render the dedicated Login / Register portal
+  if (!token || !user) {
+    return (
+      <LoginPage
+        onSuccess={() => {
+          queryClient.invalidateQueries();
+        }}
+      />
+    );
+  }
+
+  // Authenticated: render the complete trading terminal
+  return <DashboardContent />;
+};
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <DashboardContent />
+      <MainApp />
     </QueryClientProvider>
   );
 }
