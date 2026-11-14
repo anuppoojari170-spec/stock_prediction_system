@@ -447,4 +447,72 @@ export interface BacktestResponse {
   monthly_returns: MonthlyReturn[];
 }
 
+export interface BenchmarkRequest {
+  ticker: string;
+  period?: string;
+  horizon?: number;
+}
+
+export interface ModelMetric {
+  model_id: string;
+  model_name: string;
+  architecture_type: string;
+  directional_accuracy_pct: number;
+  precision: number;
+  recall: number;
+  f1_score: number;
+  rmse_pct: number;
+  sharpe_ratio: number;
+  max_drawdown_pct: number;
+  total_return_pct: number;
+  latency_ms: number;
+  rank: number;
+  is_best: boolean;
+  description: string;
+  confusion_matrix: {
+    tp: number;
+    fp: number;
+    tn: number;
+    fn: number;
+  };
+}
+
+export interface MultiModelEquityPoint {
+  date: string;
+  benchmark: number;
+  ma_baseline: number;
+  ridge: number;
+  rf: number;
+  gbdt: number;
+  lstm: number;
+}
+
+export interface FeatureImportanceItem {
+  feature: string;
+  importance_pct: number;
+  category: string;
+}
+
+export interface AcademicDefenseItem {
+  question: string;
+  answer: string;
+  academic_context: string;
+}
+
+export interface BenchmarkResponse {
+  ticker: string;
+  period: string;
+  horizon_days: number;
+  sample_count: number;
+  train_samples: number;
+  test_samples: number;
+  validation_method: string;
+  best_model: string;
+  models: ModelMetric[];
+  equity_curves: MultiModelEquityPoint[];
+  feature_importance: FeatureImportanceItem[];
+  viva_defense_guide: AcademicDefenseItem[];
+}
+
+
 

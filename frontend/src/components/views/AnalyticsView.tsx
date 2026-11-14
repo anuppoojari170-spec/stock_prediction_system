@@ -18,6 +18,7 @@ import {
   BacktestResponse,
   StrategyType,
 } from "../../types";
+import { ModelBenchmarkTab } from "../analytics/ModelBenchmarkTab";
 
 const POPULAR_TICKERS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN"];
 
@@ -65,7 +66,8 @@ export const AnalyticsView: React.FC = () => {
   const [backtestData, setBacktestData] = useState<BacktestResponse | null>(null);
   const [filterTradeLog, setFilterTradeLog] = useState<"ALL" | "WINS" | "LOSSES">("ALL");
 
-  // Run backtest on initial mount
+  // Sub-tab state
+  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<"benchmark" | "backtest">("benchmark");
   useEffect(() => {
     runBacktest();
   }, []);
@@ -149,8 +151,42 @@ export const AnalyticsView: React.FC = () => {
 
   return (
     <div className="space-y-5 select-none">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#26354B]">
+      {/* Top Level Sub-Navigation Tabs */}
+      <div className="flex items-center space-x-2 border-b border-[#26354B] pb-0.5">
+        <button
+          onClick={() => setActiveAnalyticsTab("benchmark")}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-lg font-heading text-xs font-bold transition-all border-b-2 cursor-pointer ${
+            activeAnalyticsTab === "benchmark"
+              ? "border-[#386BFF] text-[#F1F5FC] bg-[#162238]/80 shadow-sm"
+              : "border-transparent text-[#94A3B8] hover:text-[#F1F5FC] hover:bg-[#111C30]/50"
+          }`}
+        >
+          <Award size={15} className={activeAnalyticsTab === "benchmark" ? "text-[#386BFF]" : "text-[#94A3B8]"} />
+          <span>ML Model Benchmark & Leaderboard</span>
+          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#386BFF]/20 text-[#386BFF] border border-[#386BFF]/30">
+            FINAL YEAR ML
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveAnalyticsTab("backtest")}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-lg font-heading text-xs font-bold transition-all border-b-2 cursor-pointer ${
+            activeAnalyticsTab === "backtest"
+              ? "border-[#00C087] text-[#F1F5FC] bg-[#162238]/80 shadow-sm"
+              : "border-transparent text-[#94A3B8] hover:text-[#F1F5FC] hover:bg-[#111C30]/50"
+          }`}
+        >
+          <Activity size={15} className={activeAnalyticsTab === "backtest" ? "text-[#00C087]" : "text-[#94A3B8]"} />
+          <span>Algorithmic Strategy Backtester</span>
+        </button>
+      </div>
+
+      {activeAnalyticsTab === "benchmark" ? (
+        <ModelBenchmarkTab />
+      ) : (
+        <>
+          {/* Header Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#26354B]">
         <div>
           <div className="flex items-center space-x-2">
             <Activity className="text-[#386BFF]" size={20} />
@@ -695,6 +731,8 @@ export const AnalyticsView: React.FC = () => {
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 };

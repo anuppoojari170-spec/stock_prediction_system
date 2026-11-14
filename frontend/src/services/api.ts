@@ -18,6 +18,8 @@ import {
   WatchlistItem,
   BacktestRequest,
   BacktestResponse,
+  BenchmarkRequest,
+  BenchmarkResponse,
 } from "../types";
 
 
@@ -210,6 +212,10 @@ export const watchlistApi = {
 export const backtestApi = {
   run: async (req: BacktestRequest): Promise<BacktestResponse> => {
     const res = await api.post<BacktestResponse>("/backtest/run", req);
+    return res.data;
+  },
+  runBenchmark: async (req: BenchmarkRequest): Promise<BenchmarkResponse> => {
+    const res = await api.post<BenchmarkResponse>("/backtest/benchmark", req);
     return res.data;
   },
 };
