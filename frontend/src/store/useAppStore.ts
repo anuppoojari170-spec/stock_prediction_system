@@ -75,6 +75,14 @@ interface AppState {
   setOrderPrice: (price: number) => void;
   setTriggerPrice: (price: number) => void;
   setIsConfirmModalOpen: (open: boolean) => void;
+  isOrderModalOpen: boolean;
+  openOrderModal: (ticker?: string, side?: OrderSide) => void;
+  closeOrderModal: () => void;
+
+  // AI Copilot state
+  isAiCopilotOpen: boolean;
+  setAiCopilotOpen: (open: boolean) => void;
+  toggleAiCopilot: () => void;
 
   submitOrder: (order: Omit<OrderItem, "id" | "timestamp" | "status" | "filledQuantity">) => { success: boolean; message: string; orderId?: string };
   cancelOrder: (orderId: string) => void;
@@ -125,9 +133,10 @@ export const useAppStore = create<AppState>((set, get) => {
     orderType: "MARKET",
     productType: "CNC",
     orderQty: 10,
-    orderPrice: 1330.00,
-    triggerPrice: 1320.00,
+    orderPrice: 1339.70,
+    triggerPrice: 1330.00,
     isConfirmModalOpen: false,
+    isOrderModalOpen: false,
 
     orders: initialOrders,
     positions: initialPositions,
@@ -284,6 +293,17 @@ export const useAppStore = create<AppState>((set, get) => {
     setOrderPrice: (orderPrice) => set({ orderPrice }),
     setTriggerPrice: (triggerPrice) => set({ triggerPrice }),
     setIsConfirmModalOpen: (isConfirmModalOpen) => set({ isConfirmModalOpen }),
+    openOrderModal: (ticker, side = "BUY") =>
+      set((state) => ({
+        isOrderModalOpen: true,
+        activeTicker: ticker ? ticker.toUpperCase() : state.activeTicker,
+        orderSide: side,
+      })),
+    closeOrderModal: () => set({ isOrderModalOpen: false }),
+
+    isAiCopilotOpen: false,
+    setAiCopilotOpen: (isAiCopilotOpen) => set({ isAiCopilotOpen }),
+    toggleAiCopilot: () => set((state) => ({ isAiCopilotOpen: !state.isAiCopilotOpen })),
 
     submitOrder: (orderData) => {
       const state = get();

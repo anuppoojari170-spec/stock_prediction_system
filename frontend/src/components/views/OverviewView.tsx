@@ -3,7 +3,7 @@ import { PortfolioSummaryCards } from "../dashboard/PortfolioSummaryCards";
 import { MarketOverview } from "../market/MarketOverview";
 import { SentimentGauge } from "../market/SentimentGauge";
 import { TradingChart } from "../chart/TradingChart";
-import { OrderEntryPanel } from "../trading/OrderEntryPanel";
+import { ErrorBoundary } from "../common/ErrorBoundary";
 import { MarketDepth } from "../trading/MarketDepth";
 import { WatchlistWidget } from "../watchlist/WatchlistWidget";
 import { RecentOrdersWidget } from "../trading/RecentOrdersWidget";
@@ -40,7 +40,9 @@ export const OverviewView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left 8 Columns: Main Chart + Market Depth & Recent Orders + Watchlist Table */}
         <div className="lg:col-span-8 space-y-4">
-          <TradingChart ticker={activeTicker} />
+          <ErrorBoundary fallbackTitle="Interactive Trading Chart">
+            <TradingChart ticker={activeTicker} />
+          </ErrorBoundary>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <MarketDepth ticker={activeTicker} />
@@ -51,13 +53,12 @@ export const OverviewView: React.FC = () => {
           <WatchlistWidget />
         </div>
 
-        {/* Right 4 Columns: AI Sentiment Engine + Order Entry Panel */}
+        {/* Right 4 Columns: AI Sentiment Engine */}
         <div className="lg:col-span-4 space-y-4">
           {/* Core AI Intelligence Sentiment & Prediction Gauge */}
-          <SentimentGauge ticker={activeTicker} />
-
-          {/* Execution Order Entry Panel */}
-          <OrderEntryPanel ticker={activeTicker} />
+          <ErrorBoundary fallbackTitle="AI Sentiment & Prediction Engine">
+            <SentimentGauge ticker={activeTicker} />
+          </ErrorBoundary>
         </div>
       </div>
     </div>

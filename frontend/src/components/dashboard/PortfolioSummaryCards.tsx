@@ -14,7 +14,7 @@ import { tradingApi } from "../../services/api";
 import { PortfolioSummary } from "../../types";
 
 export const PortfolioSummaryCards: React.FC = () => {
-  const { virtualBalance, usedMargin, mode } = useAppStore();
+  const { virtualBalance, usedMargin, mode, setActiveTab } = useAppStore();
 
   const { data: serverSummary } = useQuery<PortfolioSummary>({
     queryKey: ["portfolioSummaryCards"],
@@ -38,6 +38,7 @@ export const PortfolioSummaryCards: React.FC = () => {
       icon: Briefcase,
       tooltip: "The total capital you have invested to buy shares in your portfolio.",
       highlight: null,
+      tabTarget: "portfolio" as const,
     },
     {
       title: "Current Portfolio Value",
@@ -46,6 +47,7 @@ export const PortfolioSummaryCards: React.FC = () => {
       icon: DollarSign,
       tooltip: "The present market valuation of all your equity shares at current market prices.",
       highlight: todaysPnl >= 0 ? "profit" : "loss",
+      tabTarget: "portfolio" as const,
     },
     {
       title: "Total Profit / Loss",
@@ -55,6 +57,7 @@ export const PortfolioSummaryCards: React.FC = () => {
       tooltip: "Net gain or loss from your investments since purchase.",
       highlight: isPnlPositive ? "profit" : "loss",
       isPnl: true,
+      tabTarget: "portfolio" as const,
     },
     {
       title: "Available Margin",
@@ -63,6 +66,7 @@ export const PortfolioSummaryCards: React.FC = () => {
       icon: Wallet,
       tooltip: "Unused liquid funds available immediately to place new equity or intraday orders.",
       highlight: "blue",
+      tabTarget: "funds" as const,
     },
   ];
 
@@ -75,7 +79,9 @@ export const PortfolioSummaryCards: React.FC = () => {
         return (
           <div
             key={idx}
-            className="nexus-card p-4 flex flex-col justify-between relative overflow-hidden group"
+            onClick={() => setActiveTab(card.tabTarget)}
+            className="nexus-card p-4 flex flex-col justify-between relative overflow-hidden group cursor-pointer hover:border-[#386BFF]/50 transition-all"
+            title={`View ${card.title} Details`}
           >
             {/* Header row */}
             <div className="flex items-center justify-between">

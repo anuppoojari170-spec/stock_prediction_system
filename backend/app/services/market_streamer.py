@@ -3,7 +3,7 @@ import datetime
 import logging
 import random
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from app.services.websocket_manager import ws_manager
 
 logger = logging.getLogger("TradeAIPilot.Streamer")
@@ -32,13 +32,13 @@ _BASE_VOLUMES: Dict[str, int] = {
     "ASIANPAINT": 1100000, "HCLTECH": 2800000, "LTIM": 850000,
 }
 
-# Major Indian indices
+# Major Indian indices (actual current baseline)
 _INITIAL_INDICES: Dict[str, dict] = {
-    "NIFTY 50": {"value": 24345.80, "prev_close": 24200.60},
-    "SENSEX": {"value": 79890.15, "prev_close": 79469.65},
-    "BANK NIFTY": {"value": 51780.40, "prev_close": 51890.65},
+    "NIFTY 50": {"value": 25144.30, "prev_close": 25299.35},
+    "SENSEX": {"value": 81592.45, "prev_close": 81911.01},
+    "BANK NIFTY": {"value": 61034.10, "prev_close": 61518.50},
     "NIFTY IT": {"value": 42150.30, "prev_close": 41839.50},
-    "INDIA VIX": {"value": 13.45, "prev_close": 13.87},
+    "INDIA VIX": {"value": 15.50, "prev_close": 16.59},
     "USD / INR": {"value": 84.38, "prev_close": 84.34},
 }
 
@@ -57,49 +57,85 @@ def is_indian_market_open() -> bool:
     return market_open <= current_time <= market_close
 
 
-def _fetch_real_prices_sync() -> Dict[str, float]:
-    """Fetch real current prices from yfinance for all tracked tickers.
+def _fetch_real_prices_sync() -> Dict[str, Any]:
+    """Fetch real current prices and indices from Yahoo Finance fast_info in parallel.
     Run in an executor thread so it never blocks the async event loop."""
-    try:
-        import yfinance as yf
-        import pandas as pd
+    import concurrent.futures
+    import yfinance as yf
 
-        symbols = [f"{t}.NS" for t in _TICKERS]
-        logger.info("MarketStreamer: background syncing real prices from yfinance for %d tickers...", len(symbols))
-        data = yf.download(
-            tickers=symbols,
-            period="2d",
-            interval="1d",
-            group_by="ticker",
-            threads=True,
-            progress=False,
-            auto_adjust=True,
-        )
+    stock_quotes: Dict[str, dict] = {}
 
-        prices: Dict[str, float] = {}
-        for ticker in _TICKERS:
-            sym = f"{ticker}.NS"
+    def fetch_stock(ticker: str):
+        candidates = [f"{ticker}.NS"]
+        if ticker == "TATAMOTORS":
+            candidates.append("TMPV.NS")
+
+        for sym in candidates:
             try:
-                if isinstance(data.columns, pd.MultiIndex):
-                    if sym in data.columns.get_level_values(0):
-                        close_col = data[sym]["Close"].dropna()
-                        if not close_col.empty:
-                            prices[ticker] = round(float(close_col.iloc[-1]), 2)
-                            continue
-                else:
-                    close_col = data["Close"].dropna()
-                    if not close_col.empty:
-                        prices[ticker] = round(float(close_col.iloc[-1]), 2)
-                        continue
+                t = yf.Ticker(sym)
+                fi = t.fast_info
+                lp = round(float(fi['last_price']), 2)
+                pc = round(float(fi['previous_close']), 2)
+                if lp > 0:
+                    hi = round(float(fi['day_high']), 2) if 'day_high' in fi and fi['day_high'] else lp
+                    lo = round(float(fi['day_low']), 2) if 'day_low' in fi and fi['day_low'] else lp
+                    vo = int(fi['last_volume']) if 'last_volume' in fi and fi['last_volume'] else 2000000
+                    op = round(float(fi['open']), 2) if 'open' in fi and fi['open'] else pc
+                    chg = round(lp - pc, 2)
+                    pct = round((chg / pc) * 100, 2) if pc else 0.0
+                    return ticker, {
+                        "price": lp,
+                        "prev_close": pc,
+                        "open": op,
+                        "high": hi,
+                        "low": lo,
+                        "volume": vo,
+                        "change": chg,
+                        "change_pct": pct,
+                    }
             except Exception:
-                pass
+                continue
+        return ticker, None
 
-        if prices:
-            logger.info("MarketStreamer: successfully synced real prices for %d / %d tickers", len(prices), len(_TICKERS))
-        return prices
+    def fetch_index(name: str, sym: str):
+        try:
+            t = yf.Ticker(sym)
+            fi = t.fast_info
+            lp = round(float(fi['last_price']), 2)
+            pc = round(float(fi['previous_close']), 2)
+            if lp > 0:
+                chg = round(lp - pc, 2)
+                pct = round((chg / pc) * 100, 2) if pc else 0.0
+                return name, {"value": lp, "prev_close": pc, "change": chg, "change_pct": pct}
+        except Exception:
+            pass
+        return name, None
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            stock_futures = [ex.submit(fetch_stock, t) for t in _TICKERS]
+            index_futures = [
+                ex.submit(fetch_index, "NIFTY 50", "^NSEI"),
+                ex.submit(fetch_index, "SENSEX", "^BSESN"),
+                ex.submit(fetch_index, "BANK NIFTY", "^NSEBANK"),
+                ex.submit(fetch_index, "INDIA VIX", "^INDIAVIX"),
+            ]
+
+            for f in concurrent.futures.as_completed(stock_futures):
+                ticker, res = f.result()
+                if res:
+                    stock_quotes[ticker] = res
+
+            index_quotes = {}
+            for f in concurrent.futures.as_completed(index_futures):
+                name, res = f.result()
+                if res:
+                    index_quotes[name] = res
+
+        return {"stocks": stock_quotes, "indices": index_quotes}
     except Exception as e:
-        logger.warning("MarketStreamer: yfinance batch background fetch failed (%s)", e)
-        return {}
+        logger.warning("MarketStreamer: parallel fast_info sync failed (%s)", e)
+        return {"stocks": {}, "indices": {}}
 
 
 class MarketStreamer:
@@ -157,26 +193,39 @@ class MarketStreamer:
             }
 
     async def _async_sync_real_prices(self):
-        """Asynchronously sync real prices in thread pool without blocking event loop."""
+        """Asynchronously sync real prices and indices in thread pool without blocking event loop."""
         try:
-            real_prices = await asyncio.to_thread(_fetch_real_prices_sync)
-            if not real_prices:
-                return
+            data = await asyncio.to_thread(_fetch_real_prices_sync)
+            stock_quotes = data.get("stocks", {})
+            index_quotes = data.get("indices", {})
 
-            for ticker, real_price in real_prices.items():
-                if ticker in self.stocks and real_price > 0:
+            for ticker, q in stock_quotes.items():
+                if ticker in self.stocks:
                     st = self.stocks[ticker]
                     spread = st["spread"]
-                    prev = st["prev_close"]
-                    st["price"] = real_price
-                    st["high"] = max(st["high"], real_price)
-                    st["low"] = min(st["low"], real_price)
-                    st["bid"] = round(real_price - spread / 2, 2)
-                    st["ask"] = round(real_price + spread / 2, 2)
-                    st["change"] = round(real_price - prev, 2)
-                    st["change_pct"] = round(((real_price - prev) / prev) * 100, 2)
+                    st["price"] = q["price"]
+                    st["prev_close"] = q["prev_close"]
+                    st["open"] = q["open"]
+                    st["high"] = max(st["high"], q["high"])
+                    st["low"] = min(st["low"], q["low"])
+                    st["volume"] = max(st["volume"], q["volume"])
+                    st["change"] = q["change"]
+                    st["change_pct"] = q["change_pct"]
+                    st["bid"] = round(q["price"] - spread / 2, 2)
+                    st["ask"] = round(q["price"] + spread / 2, 2)
+                    st["direction"] = "up" if q["change"] >= 0 else "down"
 
-            logger.info("MarketStreamer: live prices updated to current market quotes.")
+            for name, q in index_quotes.items():
+                if name in self.indices:
+                    idx = self.indices[name]
+                    idx["value"] = q["value"]
+                    idx["prev_close"] = q["prev_close"]
+                    idx["change"] = q["change"]
+                    idx["change_pct"] = q["change_pct"]
+                    idx["direction"] = "up" if q["change"] >= 0 else "down"
+
+            if stock_quotes:
+                logger.info("MarketStreamer: live prices updated to current real market quotes (%d stocks, %d indices).", len(stock_quotes), len(index_quotes))
         except Exception as e:
             logger.warning("MarketStreamer: failed async price sync: %s", e)
 
@@ -220,40 +269,44 @@ class MarketStreamer:
 
     async def _tick_stock(self, ticker: str):
         st = self.stocks[ticker]
-        old_price = st["price"]
         spread = st["spread"]
+        market_open = is_indian_market_open()
 
-        # Realistic tick variation (±0.06% micro-movement with slight upward bias)
-        pct_delta = random.gauss(0.00005, 0.0006)
-        tick_increment = 0.05 if old_price < 1000 else (0.10 if old_price < 3000 else 0.25)
+        if market_open:
+            old_price = st["price"]
+            # Realistic tick variation (micro-movement tightly bounded around live quote)
+            pct_delta = random.gauss(0.00001, 0.0002)
+            tick_increment = 0.05 if old_price < 1000 else (0.10 if old_price < 3000 else 0.25)
 
-        raw_price = old_price * (1.0 + pct_delta)
-        # Snap to valid tick size
-        new_price = round(round(raw_price / tick_increment) * tick_increment, 2)
+            raw_price = old_price * (1.0 + pct_delta)
+            new_price = round(round(raw_price / tick_increment) * tick_increment, 2)
 
-        # Prevent runaway drift beyond intraday bands (±8% from open)
-        open_price = st["open"]
-        if new_price > open_price * 1.08:
-            new_price = round(open_price * 1.08, 2)
-        elif new_price < open_price * 0.92:
-            new_price = round(open_price * 0.92, 2)
+            # Prevent drift beyond +/- 3% from real baseline
+            anchor = st["prev_close"] or old_price
+            if abs(new_price - anchor) / anchor > 0.03:
+                new_price = old_price
 
-        # Update high, low, volume, direction
-        st["high"] = max(st["high"], new_price)
-        st["low"] = min(st["low"], new_price)
-        st["volume"] += random.randint(100, 4500)
+            st["high"] = max(st["high"], new_price)
+            st["low"] = min(st["low"], new_price)
+            st["volume"] += random.randint(50, 900)
 
-        direction = "up" if new_price > old_price else ("down" if new_price < old_price else st["direction"])
-        st["direction"] = direction
-        st["price"] = new_price
-        st["bid"] = round(new_price - spread / 2, 2)
-        st["ask"] = round(new_price + spread / 2, 2)
+            direction = "up" if new_price > old_price else ("down" if new_price < old_price else st["direction"])
+            st["direction"] = direction
+            st["price"] = new_price
+            st["bid"] = round(new_price - spread / 2, 2)
+            st["ask"] = round(new_price + spread / 2, 2)
 
-        prev = st["prev_close"]
-        chg = round(new_price - prev, 2)
-        pct = round((chg / prev) * 100, 2)
-        st["change"] = chg
-        st["change_pct"] = pct
+            prev = st["prev_close"]
+            chg = round(new_price - prev, 2)
+            pct = round((chg / prev) * 100, 2)
+            st["change"] = chg
+            st["change_pct"] = pct
+        else:
+            # Market Closed: Pin to actual real closing exchange price (never drift)
+            new_price = st["price"]
+            direction = st["direction"]
+            chg = st["change"]
+            pct = st["change_pct"]
 
         payload = {
             "type": "TICK",
@@ -276,8 +329,8 @@ class MarketStreamer:
         # Broadcast tick
         await ws_manager.broadcast_json(payload, ticker=ticker)
 
-        # Occasionally broadcast updated L2 depth for this ticker (35% chance on tick)
-        if random.random() < 0.35:
+        # Occasionally broadcast updated L2 depth for this ticker (30% chance on tick)
+        if random.random() < 0.30:
             depth_payload = {
                 "type": "DEPTH",
                 "data": self.generate_depth(ticker),
@@ -286,18 +339,27 @@ class MarketStreamer:
 
     async def _tick_index(self, name: str):
         idx = self.indices[name]
-        old_val = idx["value"]
-        pct_delta = random.gauss(0.00002, 0.0003)
-        new_val = round(old_val * (1.0 + pct_delta), 2)
-        prev = idx["prev_close"]
-        chg = round(new_val - prev, 2)
-        pct = round((chg / prev) * 100, 2)
-        direction = "up" if new_val >= old_val else "down"
+        market_open = is_indian_market_open()
 
-        idx["value"] = new_val
-        idx["change"] = chg
-        idx["change_pct"] = pct
-        idx["direction"] = direction
+        if market_open:
+            old_val = idx["value"]
+            pct_delta = random.gauss(0.00001, 0.0002)
+            new_val = round(old_val * (1.0 + pct_delta), 2)
+            prev = idx["prev_close"]
+            chg = round(new_val - prev, 2)
+            pct = round((chg / prev) * 100, 2)
+            direction = "up" if new_val >= old_val else "down"
+
+            idx["value"] = new_val
+            idx["change"] = chg
+            idx["change_pct"] = pct
+            idx["direction"] = direction
+        else:
+            # Market Closed: Pin to real closing value
+            new_val = idx["value"]
+            chg = idx["change"]
+            pct = idx["change_pct"]
+            direction = idx["direction"]
 
         payload = {
             "type": "INDEX_TICK",
@@ -320,7 +382,7 @@ class MarketStreamer:
         index_names = list(self.indices.keys())
 
         # Give heavier weight to popular tickers
-        priority_tickers = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "TATAMOTORS"]
+        priority_tickers = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "BHARTIARTL"]
 
         # Run an initial asynchronous sync with real quotes right as stream loop starts
         asyncio.create_task(self._async_sync_real_prices())
@@ -347,9 +409,9 @@ class MarketStreamer:
                     idx_name = random.choice(index_names)
                     await self._tick_index(idx_name)
 
-                # Periodic resync with real yfinance every ~5 minutes (approx 450 loops)
+                # Periodic resync with real quotes every ~25 seconds (approx 35 loops)
                 sync_counter += 1
-                if sync_counter >= 450:
+                if sync_counter >= 35:
                     sync_counter = 0
                     asyncio.create_task(self._async_sync_real_prices())
 

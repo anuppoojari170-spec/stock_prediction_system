@@ -13,6 +13,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
+import { CirclingLoader } from "../common/CirclingLoader";
 import { authApi } from "../../services/api";
 
 interface LoginPageProps {
@@ -292,7 +293,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
               className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-[#386BFF] to-[#4C7DFF] hover:from-[#4C7DFF] hover:to-[#5E8DFF] text-white text-xs font-bold uppercase tracking-wider shadow-lg shadow-[#386BFF]/30 transition-all disabled:opacity-50 flex items-center justify-center space-x-2"
             >
               {loading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <CirclingLoader size="sm" color="text-white" />
               ) : (
                 <span>
                   {mode === "login"

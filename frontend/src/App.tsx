@@ -14,6 +14,8 @@ import { NewsView } from "./components/views/NewsView";
 import { AnalyticsView } from "./components/views/AnalyticsView";
 import { SettingsView } from "./components/views/SettingsView";
 import { AuthModal } from "./components/auth/AuthModal";
+import { OrderEntryModal } from "./components/trading/OrderEntryModal";
+import { FloatingAiCopilot } from "./components/assistant/FloatingAiCopilot";
 import { LoginPage } from "./components/auth/LoginPage";
 import { useAppStore } from "./store/useAppStore";
 import { useAuthStore } from "./store/useAuthStore";
@@ -89,6 +91,12 @@ const DashboardContent: React.FC = () => {
 
       {/* Global Authentication Modal (for switching or re-authenticating) */}
       <AuthModal />
+
+      {/* Global Order Entry Modal (pops up anywhere when Buy/Sell clicked) */}
+      <OrderEntryModal />
+
+      {/* Interactive Floating AI Trading Copilot */}
+      <FloatingAiCopilot />
     </div>
   );
 };
@@ -128,19 +136,19 @@ const MainApp: React.FC = () => {
     );
   }
 
-  // Not authenticated: render the dedicated Login / Register portal
-  if (!token || !user) {
-    return (
-      <LoginPage
-        onSuccess={() => {
-          queryClient.invalidateQueries();
-        }}
-      />
-    );
-  }
-
-  // Authenticated: render the complete trading terminal
-  return <DashboardContent />;
+  return (
+    <>
+      {(!token || !user) ? (
+        <LoginPage
+          onSuccess={() => {
+            queryClient.invalidateQueries();
+          }}
+        />
+      ) : (
+        <DashboardContent />
+      )}
+    </>
+  );
 };
 
 export function App() {

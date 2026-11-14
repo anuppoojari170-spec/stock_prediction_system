@@ -29,6 +29,10 @@ class Settings:
     # Market Data
     MARKET_DATA_PROVIDER: str = os.getenv("MARKET_DATA_PROVIDER", "yfinance")
 
+    # AI & Google Gemini Integration
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+
     # CORS
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",

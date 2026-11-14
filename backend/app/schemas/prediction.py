@@ -72,6 +72,16 @@ class MLForecastData(BaseModel):
     forecast_points: List[ForecastPoint]
 
 
+class AICommentaryResponse(BaseModel):
+    ticker: str
+    headline: str
+    thesis: str
+    catalysts: List[str]
+    risks: List[str]
+    beginner_takeaway: str
+    provider: str
+
+
 class PredictionResponse(BaseModel):
     ticker: str
     current_price: float
@@ -89,6 +99,26 @@ class PredictionResponse(BaseModel):
     trade_plan: Optional[TradePlan] = None
     breakdown: Optional[List[IndicatorSignal]] = None
     ml_forecast: Optional[MLForecastData] = None
+    commentary: Optional[AICommentaryResponse] = None
+
+
+class AIChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class AIChatRequest(BaseModel):
+    message: str
+    ticker: Optional[str] = None
+    conversation: Optional[List[AIChatMessage]] = []
+    mode: Optional[str] = "pro"
+
+
+class AIChatResponse(BaseModel):
+    reply: str
+    suggested_actions: Optional[List[str]] = []
+    ticker: Optional[str] = None
+    provider: str
 
 
 class ChartCandle(BaseModel):

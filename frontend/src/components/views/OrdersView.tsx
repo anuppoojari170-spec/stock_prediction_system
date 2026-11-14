@@ -3,6 +3,7 @@ import { FileText, ArrowUpRight, ArrowDownRight, Search, RefreshCw } from "lucid
 import { useQuery } from "@tanstack/react-query";
 import { tradingApi } from "../../services/api";
 import { OrderItem, OrderStatus } from "../../types";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 export const OrdersView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"ALL" | OrderStatus>("ALL");
@@ -149,8 +150,8 @@ export const OrdersView: React.FC = () => {
             <tbody className="divide-y divide-[#26354B]/30 font-mono-numbers">
               {isLoading ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-xs text-[#94A3B8]">
-                    Loading execution logs from exchange...
+                  <td colSpan={10} className="py-12 text-center">
+                    <CirclingLoader size="md" label="Loading trade execution logs from exchange..." />
                   </td>
                 </tr>
               ) : filteredOrders.length > 0 ? (

@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../store/useAppStore";
 import { watchlistApi } from "../../services/api";
 import { WatchlistItem } from "../../types";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 const popularSuggestions = [
   "RELIANCE",
@@ -30,7 +31,7 @@ const popularSuggestions = [
 
 export const WatchlistView: React.FC = () => {
   const queryClient = useQueryClient();
-  const { setActiveTicker, setOrderSide, setActiveTab, liveTicks } = useAppStore();
+  const { setActiveTicker, openOrderModal, setActiveTab, liveTicks } = useAppStore();
 
   const [selectedCat, setSelectedCat] = useState<string>("Watchlist 1");
   const [searchFilter, setSearchFilter] = useState<string>("");
@@ -38,6 +39,12 @@ export const WatchlistView: React.FC = () => {
   const [showCreateCatModal, setShowCreateCatModal] = useState<boolean>(false);
   const [newTickerInput, setNewTickerInput] = useState<string>("");
   const [newCatInput, setNewCatInput] = useState<string>("");
+
+  // CRUD operation loading states
+  const [isAddingStock, setIsAddingStock] = useState<boolean>(false);
+  const [isCreatingCat, setIsCreatingCat] = useState<boolean>(false);
+  const [deletingTicker, setDeletingTicker] = useState<string | null>(null);
+  const [deletingCat, setDeletingCat] = useState<string | null>(null);
 
   // 1. Fetch user's custom watchlist categories from backend database
   const {
@@ -77,10 +84,11 @@ export const WatchlistView: React.FC = () => {
         item.companyName.toLowerCase().includes(searchFilter.toLowerCase()))
   );
 
-  // Handlers for Categories
+  // Handlers for Categories (CRUD with loading states)
   const handleCreateCategory = async () => {
     const clean = newCatInput.trim();
     if (!clean) return;
+    setIsCreatingCat(true);
     try {
       await watchlistApi.createCategory(clean);
       await queryClient.invalidateQueries({ queryKey: ["watchlistCategories"] });
@@ -89,25 +97,31 @@ export const WatchlistView: React.FC = () => {
       setShowCreateCatModal(false);
     } catch (err) {
       console.error("Failed to create watchlist category:", err);
+    } finally {
+      setIsCreatingCat(false);
     }
   };
 
   const handleDeleteCategory = async (catName: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm(`Delete watchlist "${catName}" and all stocks in it?`)) return;
+    setDeletingCat(catName);
     try {
       await watchlistApi.deleteCategory(catName);
       await queryClient.invalidateQueries({ queryKey: ["watchlistCategories"] });
       await queryClient.invalidateQueries({ queryKey: ["userWatchlist"] });
     } catch (err) {
       console.error("Failed to delete watchlist category:", err);
+    } finally {
+      setDeletingCat(null);
     }
   };
 
-  // Handlers for Stocks
+  // Handlers for Stocks (CRUD with loading states)
   const handleAddNewSecurity = async (tickerToAdd?: string) => {
     const symbol = (tickerToAdd || newTickerInput).trim().toUpperCase();
     if (!symbol) return;
+    setIsAddingStock(true);
 
     try {
       await watchlistApi.add(symbol, effectiveCat);
@@ -117,6 +131,8 @@ export const WatchlistView: React.FC = () => {
       setShowAddModal(false);
     } catch (err) {
       console.error("Failed to add stock to watchlist:", err);
+    } finally {
+      setIsAddingStock(false);
     }
   };
 
@@ -130,12 +146,15 @@ export const WatchlistView: React.FC = () => {
   };
 
   const handleRemove = async (ticker: string) => {
+    setDeletingTicker(ticker);
     try {
       await watchlistApi.remove(ticker, effectiveCat);
       await queryClient.invalidateQueries({ queryKey: ["userWatchlist", effectiveCat] });
       await queryClient.invalidateQueries({ queryKey: ["watchlistCategories"] });
     } catch (err) {
       console.error("Failed to remove stock:", err);
+    } finally {
+      setDeletingTicker(null);
     }
   };
 
@@ -172,29 +191,41 @@ export const WatchlistView: React.FC = () => {
 
             {/* Custom Watchlist Tabs */}
             <div className="flex items-center space-x-1 p-0.5 bg-[#0B1120] rounded border border-[#26354B] text-xs font-medium overflow-x-auto no-scrollbar max-w-full">
-              {categories.map((cat) => (
-                <div
-                  key={cat.name}
-                  onClick={() => setSelectedCat(cat.name)}
-                  className={`flex items-center space-x-1.5 px-3 py-1 rounded cursor-pointer transition-all ${
-                    effectiveCat === cat.name
-                      ? "bg-[#386BFF] text-white shadow-sm"
-                      : "text-[#94A3B8] hover:text-[#F1F5FC] hover:bg-[#1A2940]"
-                  }`}
-                >
-                  <span>{cat.name}</span>
-                  <span className="text-[10px] opacity-75 font-mono">({cat.count})</span>
-                  {categories.length > 1 && (
-                    <button
-                      onClick={(e) => handleDeleteCategory(cat.name, e)}
-                      className="p-0.5 rounded hover:bg-black/30 hover:text-white"
-                      title="Delete Watchlist"
-                    >
-                      <X size={11} />
-                    </button>
-                  )}
+              {loadingCats ? (
+                <div className="flex items-center space-x-1.5 px-2 py-1">
+                  <div className="w-16 h-5 bg-[#1A2940] rounded animate-pulse" />
+                  <div className="w-20 h-5 bg-[#1A2940] rounded animate-pulse" />
                 </div>
-              ))}
+              ) : (
+                categories.map((cat) => (
+                  <div
+                    key={cat.name}
+                    onClick={() => setSelectedCat(cat.name)}
+                    className={`flex items-center space-x-1.5 px-3 py-1 rounded cursor-pointer transition-all ${
+                      effectiveCat === cat.name
+                        ? "bg-[#386BFF] text-white shadow-sm"
+                        : "text-[#94A3B8] hover:text-[#F1F5FC] hover:bg-[#1A2940]"
+                    }`}
+                  >
+                    <span>{cat.name}</span>
+                    <span className="text-[10px] opacity-75 font-mono">({cat.count})</span>
+                    {categories.length > 1 && (
+                      <button
+                        onClick={(e) => handleDeleteCategory(cat.name, e)}
+                        disabled={deletingCat === cat.name}
+                        className="p-0.5 rounded hover:bg-black/30 hover:text-white"
+                        title="Delete Watchlist"
+                      >
+                        {deletingCat === cat.name ? (
+                          <CirclingLoader size="xs" color="text-[#F04452]" />
+                        ) : (
+                          <X size={11} />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
 
               {/* Add New Watchlist Tab */}
               <button
@@ -255,23 +286,25 @@ export const WatchlistView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#26354B]/30 font-mono-numbers">
-                {filteredItems.length === 0 ? (
+                {loadingItems ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center">
+                      <CirclingLoader size="md" label={`Loading ${effectiveCat} securities...`} />
+                    </td>
+                  </tr>
+                ) : filteredItems.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-xs text-[#94A3B8]">
-                      {loadingItems ? (
-                        "Loading watchlist..."
-                      ) : (
-                        <div className="space-y-2">
-                          <p>This watchlist is empty.</p>
-                          <button
-                            onClick={() => setShowAddModal(true)}
-                            className="px-3 py-1.5 rounded bg-[#1A2940] hover:bg-[#26354B] text-[#386BFF] text-xs font-medium border border-[#386BFF]/30 inline-flex items-center space-x-1"
-                          >
-                            <Plus size={13} />
-                            <span>Add Stocks to {effectiveCat}</span>
-                          </button>
-                        </div>
-                      )}
+                      <div className="space-y-2">
+                        <p>This watchlist is empty.</p>
+                        <button
+                          onClick={() => setShowAddModal(true)}
+                          className="px-3 py-1.5 rounded bg-[#1A2940] hover:bg-[#26354B] text-[#386BFF] text-xs font-medium border border-[#386BFF]/30 inline-flex items-center space-x-1"
+                        >
+                          <Plus size={13} />
+                          <span>Add Stocks to {effectiveCat}</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -336,31 +369,28 @@ export const WatchlistView: React.FC = () => {
                         <td className="py-2.5 px-3 text-center">
                           <div className="flex items-center justify-center space-x-1.5 font-sans">
                             <button
-                              onClick={() => {
-                                setActiveTicker(item.ticker);
-                                setOrderSide("BUY");
-                                setActiveTab("overview");
-                              }}
-                              className="px-2.5 py-1 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-white text-[10px] font-semibold"
+                              onClick={() => openOrderModal(item.ticker, "BUY")}
+                              className="px-2.5 py-1 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-white text-[10px] font-semibold transition-colors"
                             >
                               Buy
                             </button>
                             <button
-                              onClick={() => {
-                                setActiveTicker(item.ticker);
-                                setOrderSide("SELL");
-                                setActiveTab("overview");
-                              }}
-                              className="px-2.5 py-1 rounded bg-[#F04452] hover:bg-[#ff5a68] text-white text-[10px] font-semibold"
+                              onClick={() => openOrderModal(item.ticker, "SELL")}
+                              className="px-2.5 py-1 rounded bg-[#F04452] hover:bg-[#ff5a68] text-white text-[10px] font-semibold transition-colors"
                             >
                               Sell
                             </button>
                             <button
                               onClick={() => handleRemove(item.ticker)}
-                              className="p-1 rounded text-[#94A3B8] hover:text-[#F04452] hover:bg-[#1A2940] transition-colors"
+                              disabled={deletingTicker === item.ticker}
+                              className="p-1 rounded text-[#94A3B8] hover:text-[#F04452] hover:bg-[#1A2940] transition-colors disabled:opacity-50"
                               title="Remove from watchlist"
                             >
-                              <Trash2 size={13} />
+                              {deletingTicker === item.ticker ? (
+                                <CirclingLoader size="xs" color="text-[#F04452]" />
+                              ) : (
+                                <Trash2 size={13} />
+                              )}
                             </button>
                           </div>
                         </td>
@@ -403,10 +433,17 @@ export const WatchlistView: React.FC = () => {
               </button>
               <button
                 onClick={handleCreateCategory}
-                disabled={!newCatInput.trim()}
-                className="flex-1 py-2 rounded-lg bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50"
+                disabled={!newCatInput.trim() || isCreatingCat}
+                className="flex-1 py-2 rounded-lg bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50 flex items-center justify-center space-x-1.5"
               >
-                Create Watchlist
+                {isCreatingCat ? (
+                  <>
+                    <CirclingLoader size="xs" color="text-white" />
+                    <span>Creating...</span>
+                  </>
+                ) : (
+                  <span>Create Watchlist</span>
+                )}
               </button>
             </div>
           </div>
@@ -465,10 +502,17 @@ export const WatchlistView: React.FC = () => {
                 </button>
                 <button
                   onClick={() => handleAddNewSecurity()}
-                  disabled={!newTickerInput.trim()}
-                  className="flex-1 py-2 rounded-lg bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50"
+                  disabled={!newTickerInput.trim() || isAddingStock}
+                  className="flex-1 py-2 rounded-lg bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50 flex items-center justify-center space-x-1.5"
                 >
-                  Add to Watchlist
+                  {isAddingStock ? (
+                    <>
+                      <CirclingLoader size="xs" color="text-white" />
+                      <span>Adding...</span>
+                    </>
+                  ) : (
+                    <span>Add to Watchlist</span>
+                  )}
                 </button>
               </div>
             </div>

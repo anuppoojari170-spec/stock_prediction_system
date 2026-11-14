@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Zap,
+  Bot,
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { NavTab } from "../../types";
@@ -48,6 +49,8 @@ export const Sidebar: React.FC = () => {
     toggleSidebar,
     mode,
     setMode,
+    toggleAiCopilot,
+    isAiCopilotOpen,
   } = useAppStore();
 
   return (
@@ -165,6 +168,39 @@ export const Sidebar: React.FC = () => {
           );
         })}
       </nav>
+
+      {/* AI Copilot Quick Launcher inside Left Sidebar */}
+      <div className="p-2 border-t border-[#26354B]/60">
+        <button
+          onClick={toggleAiCopilot}
+          className={`w-full flex items-center px-2.5 py-2 rounded-lg text-xs font-medium transition-all group relative border cursor-pointer ${
+            isAiCopilotOpen
+              ? "bg-[#7657F6]/25 border-[#7657F6]/60 text-white shadow-md shadow-[#7657F6]/20"
+              : "bg-[#111C30]/80 hover:bg-[#7657F6]/15 border-[#26354B] hover:border-[#7657F6]/40 text-[#CBD5E1]"
+          }`}
+          title={isSidebarCollapsed ? "TradePilot AI Copilot" : undefined}
+        >
+          <div className="relative flex items-center justify-center flex-shrink-0">
+            <Bot size={18} className="text-[#A78BFA]" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#00C087]" />
+          </div>
+
+          {!isSidebarCollapsed && (
+            <div className="ml-2.5 flex-1 flex items-center justify-between truncate">
+              <span className="font-semibold text-[#F1F5FC] truncate">AI Copilot</span>
+              <span className="px-1.5 py-0.5 text-[9px] rounded font-bold font-mono bg-[#7657F6]/30 text-[#A78BFA] border border-[#7657F6]/40">
+                ACTIVE
+              </span>
+            </div>
+          )}
+
+          {isSidebarCollapsed && (
+            <div className="absolute left-full ml-2 px-2.5 py-1 bg-[#1A2940] text-[#F1F5FC] text-xs rounded border border-[#26354B] opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl z-50">
+              AI Copilot
+            </div>
+          )}
+        </button>
+      </div>
 
       {/* Bottom Market Live Indicator */}
       <div className="p-3 border-t border-[#26354B] bg-[#0B1120]/40">

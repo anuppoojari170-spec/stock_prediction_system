@@ -5,43 +5,90 @@ import {
   CheckCircle2,
   AlertTriangle,
   HelpCircle,
+  X,
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { useAuthStore } from "../../store/useAuthStore";
 import { tradingApi } from "../../services/api";
 import { OrderSide, OrderType, ProductType } from "../../types";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 interface OrderEntryPanelProps {
   ticker: string;
+  onClose?: () => void;
 }
 
-export const OrderEntryPanel: React.FC<OrderEntryPanelProps> = ({ ticker }) => {
+export const OrderEntryPanel: React.FC<OrderEntryPanelProps> = ({ ticker, onClose }) => {
   const {
     exchange,
     mode,
     virtualBalance,
     submitOrder,
     liveTicks,
+    orderSide: storeSide,
+    orderType: storeType,
+    orderPrice: storePrice,
+    triggerPrice: storeTrigger,
   } = useAppStore();
 
   const { token } = useAuthStore();
 
   const liveTick = liveTicks[ticker.toUpperCase()];
-  const fallbackBase = ticker.toUpperCase() === "RELIANCE" ? 1330.00 : (ticker.toUpperCase() === "TCS" ? 3700.00 : (ticker.toUpperCase() === "TATAMOTORS" ? 790.00 : (ticker.toUpperCase() === "SBIN" ? 820.00 : 1500.00)));
+  const fallbackBase =
+    ticker.toUpperCase() === "RELIANCE"
+      ? 1339.70
+      : ticker.toUpperCase() === "TCS"
+      ? 2407.50
+      : ticker.toUpperCase() === "INFY"
+      ? 1141.50
+      : ticker.toUpperCase() === "HDFCBANK"
+      ? 804.00
+      : ticker.toUpperCase() === "ICICIBANK"
+      ? 1583.60
+      : ticker.toUpperCase() === "SBIN"
+      ? 1080.00
+      : ticker.toUpperCase() === "BHARTIARTL"
+      ? 2106.00
+      : 1339.70;
   const currentLtp = liveTick?.price ?? fallbackBase;
 
-  const [side, setSide] = useState<OrderSide>("BUY");
+  const [side, setSide] = useState<OrderSide>(storeSide || "BUY");
   const [product, setProduct] = useState<ProductType>("CNC");
-  const [orderType, setOrderType] = useState<OrderType>("MARKET");
+  const [orderType, setOrderType] = useState<OrderType>(storeType || "MARKET");
   const [qty, setQty] = useState<number>(10);
   const [customPrice, setCustomPrice] = useState<number>(currentLtp);
   const [triggerPrice, setTriggerPrice] = useState<number>(roundToTick(currentLtp * 0.98));
 
+  // Sync with store order side and type if updated externally
+  useEffect(() => {
+    if (storeSide) setSide(storeSide);
+  }, [storeSide]);
+
+  useEffect(() => {
+    if (storeType) setOrderType(storeType);
+  }, [storeType]);
+
+  useEffect(() => {
+    if (storePrice && storePrice > 0) setCustomPrice(storePrice);
+  }, [storePrice]);
+
+  useEffect(() => {
+    if (storeTrigger && storeTrigger > 0) setTriggerPrice(storeTrigger);
+  }, [storeTrigger]);
+
   // Sync custom price on ticker change
   useEffect(() => {
-    setCustomPrice(currentLtp);
-    setTriggerPrice(roundToTick(currentLtp * 0.98));
-  }, [ticker, currentLtp]);
+    if (storePrice && storePrice > 0) {
+      setCustomPrice(storePrice);
+    } else {
+      setCustomPrice(currentLtp);
+    }
+    if (storeTrigger && storeTrigger > 0) {
+      setTriggerPrice(storeTrigger);
+    } else {
+      setTriggerPrice(roundToTick(currentLtp * 0.98));
+    }
+  }, [ticker]);
 
   function roundToTick(val: number): number {
     return Math.round(val * 20) / 20;
@@ -116,7 +163,11 @@ export const OrderEntryPanel: React.FC<OrderEntryPanelProps> = ({ ticker }) => {
 
       if (res.success) {
         setStatusMessage({ text: res.message, isError: false });
-        setTimeout(() => setStatusMessage(null), 5000);
+        if (onClose) {
+          setTimeout(() => onClose(), 1500);
+        } else {
+          setTimeout(() => setStatusMessage(null), 5000);
+        }
       } else {
         setStatusMessage({ text: res.message, isError: true });
       }
@@ -138,25 +189,37 @@ export const OrderEntryPanel: React.FC<OrderEntryPanelProps> = ({ ticker }) => {
           <span className="text-[11px] text-[#94A3B8]">Order Execution Terminal</span>
         </div>
 
-        <div className="text-right font-mono-numbers">
-          <div
-            key={`${ticker}-${currentLtp}`}
-            className={`text-sm font-bold text-[#F1F5FC] px-1 py-0.5 rounded transition-colors ${
-              liveTick?.direction === "up" ? "flash-up text-[#00C087]" : liveTick?.direction === "down" ? "flash-down text-[#F04452]" : ""
-            }`}
-          >
-            ₹{currentLtp.toFixed(2)}
+        <div className="flex items-center space-x-3">
+          <div className="text-right font-mono-numbers">
+            <div
+              key={`${ticker}-${currentLtp}`}
+              className={`text-sm font-bold text-[#F1F5FC] px-1 py-0.5 rounded transition-colors ${
+                liveTick?.direction === "up" ? "flash-up text-[#00C087]" : liveTick?.direction === "down" ? "flash-down text-[#F04452]" : ""
+              }`}
+            >
+              ₹{(currentLtp || 0).toFixed(2)}
+            </div>
+            <div
+              className={`text-[11px] font-semibold ${
+                (liveTick?.change ?? 0) >= 0 ? "text-[#00C087]" : "text-[#F04452]"
+              }`}
+            >
+              {(liveTick?.change ?? 0) >= 0 ? "+" : ""}
+              {(liveTick?.change ?? 0).toFixed(2)} (
+              {(liveTick?.change_pct ?? 0) >= 0 ? "+" : ""}
+              {(liveTick?.change_pct ?? 0).toFixed(2)}%)
+            </div>
           </div>
-          <div
-            className={`text-[11px] font-semibold ${
-              (liveTick?.change ?? 0) >= 0 ? "text-[#00C087]" : "text-[#F04452]"
-            }`}
-          >
-            {(liveTick?.change ?? 0) >= 0 ? "+" : ""}
-            {(liveTick?.change ?? 0).toFixed(2)} (
-            {(liveTick?.change_pct ?? 0) >= 0 ? "+" : ""}
-            {(liveTick?.change_pct ?? 0).toFixed(2)}%)
-          </div>
+
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1 rounded text-[#94A3B8] hover:text-[#F1F5FC] hover:bg-[#1A2940] transition-colors"
+              title="Close Order Panel"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
 
       </div>
@@ -421,11 +484,18 @@ export const OrderEntryPanel: React.FC<OrderEntryPanelProps> = ({ ticker }) => {
               <button
                 onClick={handleExecuteConfirmedOrder}
                 disabled={isSubmitting}
-                className={`flex-1 py-2 rounded text-xs font-semibold text-white transition-all ${
+                className={`flex-1 py-2 rounded text-xs font-semibold text-white transition-all flex items-center justify-center space-x-1.5 ${
                   side === "BUY" ? "bg-[#386BFF] hover:bg-[#4C7DFF]" : "bg-[#F04452] hover:bg-[#ff5a68]"
                 } disabled:opacity-50`}
               >
-                {isSubmitting ? "Routing..." : "Confirm & Place"}
+                {isSubmitting ? (
+                  <>
+                    <CirclingLoader size="xs" color="text-white" />
+                    <span>Executing...</span>
+                  </>
+                ) : (
+                  <span>Confirm & Place</span>
+                )}
               </button>
             </div>
           </div>

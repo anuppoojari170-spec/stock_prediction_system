@@ -10,6 +10,9 @@ export const MarketDepth: React.FC<MarketDepthProps> = ({ ticker }) => {
   const streamDepth = useAppStore((state) => state.liveDepth[ticker.toUpperCase()]);
   const liveTick = useAppStore((state) => state.liveTicks[ticker.toUpperCase()]);
   const wsStatus = useAppStore((state) => state.wsStatus);
+  const setOrderPrice = useAppStore((state) => state.setOrderPrice);
+  const setOrderType = useAppStore((state) => state.setOrderType);
+  const setOrderSide = useAppStore((state) => state.setOrderSide);
 
   // Use live streaming L2 order book depth if available, else responsive fallback
   const depthData: MarketDepthLevel[] = useMemo(() => {
@@ -87,7 +90,16 @@ export const MarketDepth: React.FC<MarketDepthProps> = ({ ticker }) => {
             {depthData.map((row, idx) => {
               const barWidth = `${Math.min(100, Math.round((row.bidQty / maxRowQty) * 100))}%`;
               return (
-                <div key={idx} className="relative grid grid-cols-3 py-0.5 px-1 rounded overflow-hidden">
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setOrderSide("BUY");
+                    setOrderType("LIMIT");
+                    setOrderPrice(row.bidPrice);
+                  }}
+                  className="relative grid grid-cols-3 py-0.5 px-1 rounded overflow-hidden cursor-pointer hover:bg-[#00C087]/20 transition-colors"
+                  title={`Click to place Buy Limit order at ₹${row.bidPrice.toFixed(2)}`}
+                >
                   {/* Subtle depth bar */}
                   <div
                     className="absolute inset-y-0 right-0 bg-[#00C087]/15 rounded pointer-events-none"
@@ -121,7 +133,16 @@ export const MarketDepth: React.FC<MarketDepthProps> = ({ ticker }) => {
             {depthData.map((row, idx) => {
               const barWidth = `${Math.min(100, Math.round((row.askQty / maxRowQty) * 100))}%`;
               return (
-                <div key={idx} className="relative grid grid-cols-3 py-0.5 px-1 rounded overflow-hidden">
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setOrderSide("SELL");
+                    setOrderType("LIMIT");
+                    setOrderPrice(row.askPrice);
+                  }}
+                  className="relative grid grid-cols-3 py-0.5 px-1 rounded overflow-hidden cursor-pointer hover:bg-[#F04452]/20 transition-colors"
+                  title={`Click to place Sell Limit order at ₹${row.askPrice.toFixed(2)}`}
+                >
                   {/* Subtle depth bar */}
                   <div
                     className="absolute inset-y-0 left-0 bg-[#F04452]/15 rounded pointer-events-none"

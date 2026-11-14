@@ -4,12 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { tradingApi } from "../../services/api";
 import { useAppStore } from "../../store/useAppStore";
 import { Holding } from "../../types";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 export const PositionsView: React.FC = () => {
-  const { liveTicks, setActiveTicker, setOrderSide, setActiveTab } = useAppStore();
+  const { liveTicks, openOrderModal } = useAppStore();
   const [filterTab, setFilterTab] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
 
-  const { data: holdings = [] } = useQuery<Holding[]>({
+  const { data: holdings = [], isLoading: isPositionsLoading } = useQuery<Holding[]>({
     queryKey: ["portfolioHoldingsList"],
     queryFn: tradingApi.getPortfolio,
     refetchInterval: 10000,
@@ -133,7 +134,13 @@ export const PositionsView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#26354B]/30 font-mono-numbers">
-              {filteredPositions.length === 0 ? (
+              {isPositionsLoading ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center">
+                    <CirclingLoader size="md" label="Loading active trading positions..." />
+                  </td>
+                </tr>
+              ) : filteredPositions.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-xs text-[#94A3B8]">
                     No open positions currently active.
@@ -172,12 +179,9 @@ export const PositionsView: React.FC = () => {
                       </td>
                       <td className="py-2.5 px-3 text-center">
                         <button
-                          onClick={() => {
-                            setActiveTicker(pos.ticker);
-                            setOrderSide("SELL");
-                            setActiveTab("overview");
-                          }}
+                          onClick={() => openOrderModal(pos.ticker, "SELL")}
                           className="px-2.5 py-1 rounded bg-[#F04452]/20 hover:bg-[#F04452] text-[#F04452] hover:text-white text-[10px] font-semibold border border-[#F04452]/40 transition-colors"
+                          title="Place Sell order to exit position"
                         >
                           Exit Position
                         </button>

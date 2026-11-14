@@ -59,3 +59,10 @@ def get_quote(ticker: str):
     return Quote(ticker=clean_ticker, price=price)
 
 
+@router.get("/search")
+def search_equities(q: str = "", limit: int = 15):
+    """Search dynamically across all 2,600+ equities listed on the National Stock Exchange of India (NSE)."""
+    from app.services.nse_universe import nse_universe
+    return nse_universe.search_equities(q, limit=limit)
+
+

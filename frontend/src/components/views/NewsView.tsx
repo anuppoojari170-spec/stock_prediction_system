@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Newspaper, Clock, RefreshCw } from "lucide-react";
 import { NewsItem } from "../../types";
 import { marketApi } from "../../services/api";
+import { useAppStore } from "../../store/useAppStore";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 const fallbackNews: NewsItem[] = [
   {
@@ -42,6 +44,7 @@ const fallbackNews: NewsItem[] = [
 
 export const NewsView: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const { setActiveTicker, setActiveTab } = useAppStore();
 
   const categories = ["All", "Economy", "Corporate", "Earnings", "Global", "Regulation"];
 
@@ -113,7 +116,12 @@ export const NewsView: React.FC = () => {
 
         {/* News Feed List */}
         <div className="space-y-3">
-          {filteredNews.map((item) => (
+          {isLoading ? (
+            <div className="py-12 flex flex-col items-center justify-center">
+              <CirclingLoader size="md" label="Loading real-time news wire..." />
+            </div>
+          ) : (
+            filteredNews.map((item) => (
             <div
               key={item.id}
               className="p-4 rounded-md bg-[#0B1120] border border-[#26354B] hover:border-[#386BFF]/40 transition-colors"
@@ -140,7 +148,15 @@ export const NewsView: React.FC = () => {
                 </span>
               </div>
 
-              <h4 className="font-heading font-bold text-sm text-[#F1F5FC] hover:text-[#386BFF] cursor-pointer transition-colors">
+              <h4
+                onClick={() => {
+                  if (item.relatedTickers && item.relatedTickers.length > 0) {
+                    setActiveTicker(item.relatedTickers[0]);
+                    setActiveTab("overview");
+                  }
+                }}
+                className="font-heading font-bold text-sm text-[#F1F5FC] hover:text-[#386BFF] cursor-pointer transition-colors"
+              >
                 {item.title}
               </h4>
 
@@ -152,16 +168,21 @@ export const NewsView: React.FC = () => {
               <div className="flex items-center space-x-2 mt-3 pt-2 border-t border-[#26354B]/50 text-xs">
                 <span className="text-[#64748B] text-[11px]">Related:</span>
                 {item.relatedTickers.map((t) => (
-                  <span
+                  <button
                     key={t}
-                    className="px-1.5 py-0.5 rounded bg-[#1A2940] text-[#F1F5FC] font-mono text-[10px] font-bold"
+                    onClick={() => {
+                      setActiveTicker(t);
+                      setActiveTab("overview");
+                    }}
+                    className="px-1.5 py-0.5 rounded bg-[#1A2940] hover:bg-[#386BFF] text-[#F1F5FC] font-mono text-[10px] font-bold transition-colors cursor-pointer"
+                    title={`View ${t} in Terminal`}
                   >
                     {t}
-                  </span>
+                  </button>
                 ))}
               </div>
             </div>
-          ))}
+          )))}
         </div>
       </div>
     </div>

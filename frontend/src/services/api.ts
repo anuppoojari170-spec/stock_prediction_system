@@ -1,5 +1,8 @@
 import axios from "axios";
 import {
+  AICommentaryResponse,
+  AIChatRequest,
+  AIChatResponse,
   ChartHistoryResponse,
   Holding,
   IndexItem,
@@ -25,14 +28,41 @@ const api = axios.create({
   },
 });
 
-// Automatic JWT Bearer token interceptor
+let activeRequests = 0;
+type ActivityListener = (count: number) => void;
+const activityListeners = new Set<ActivityListener>();
+
+export const subscribeToApiActivity = (listener: ActivityListener) => {
+  activityListeners.add(listener);
+  listener(activeRequests);
+  return () => {
+    activityListeners.delete(listener);
+  };
+};
+
+// Automatic JWT Bearer token & active request interceptors
 api.interceptors.request.use((config) => {
+  activeRequests++;
+  activityListeners.forEach((fn) => fn(activeRequests));
   const token = localStorage.getItem("tradepilot_token");
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => {
+    activeRequests = Math.max(0, activeRequests - 1);
+    activityListeners.forEach((fn) => fn(activeRequests));
+    return response;
+  },
+  (error) => {
+    activeRequests = Math.max(0, activeRequests - 1);
+    activityListeners.forEach((fn) => fn(activeRequests));
+    return Promise.reject(error);
+  }
+);
 
 // --- Auth Endpoints ---
 export const authApi = {
@@ -76,6 +106,12 @@ export const marketApi = {
     const res = await api.get<StockDetails>(`/market/stock/${ticker}`);
     return res.data;
   },
+  searchStocks: async (query: string, limit = 15) => {
+    const res = await api.get<{ ticker: string; companyName: string }[]>(
+      `/market/search?q=${encodeURIComponent(query)}&limit=${limit}`
+    );
+    return res.data;
+  },
 };
 
 
@@ -83,6 +119,14 @@ export const marketApi = {
 export const predictionApi = {
   analyzeStock: async (ticker: string) => {
     const res = await api.post<Prediction>("/prediction/analyze", { ticker });
+    return res.data;
+  },
+  getCommentary: async (ticker: string, mode: "beginner" | "pro" = "pro") => {
+    const res = await api.post<AICommentaryResponse>("/prediction/commentary", { ticker, mode });
+    return res.data;
+  },
+  chatAssistant: async (req: AIChatRequest) => {
+    const res = await api.post<AIChatResponse>("/prediction/assistant/chat", req);
     return res.data;
   },
   getHistory: async (ticker: string, period = "3mo") => {

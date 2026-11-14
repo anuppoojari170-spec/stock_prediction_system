@@ -7,6 +7,7 @@ import {
 import { useAppStore } from "../../store/useAppStore";
 import { tradingApi } from "../../services/api";
 import { Holding } from "../../types";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 const defaultSectorBreakdown = [
   { name: "Information Technology", pct: 32.5, color: "#386BFF" },
@@ -17,11 +18,11 @@ const defaultSectorBreakdown = [
 ];
 
 export const PortfolioView: React.FC = () => {
-  const { setActiveTicker, setOrderSide, setActiveTab, liveTicks } = useAppStore();
+  const { openOrderModal, liveTicks } = useAppStore();
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"pnl" | "value" | "ticker">("value");
 
-  const { data: serverHoldings } = useQuery<Holding[]>({
+  const { data: serverHoldings, isLoading: isPortfolioLoading } = useQuery<Holding[]>({
     queryKey: ["portfolioHoldingsList"],
     queryFn: tradingApi.getPortfolio,
     refetchInterval: 10000,
@@ -202,7 +203,13 @@ export const PortfolioView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#26354B]/30 font-mono-numbers">
-              {filteredHoldings.length === 0 ? (
+              {isPortfolioLoading ? (
+                <tr>
+                  <td colSpan={9} className="py-12 text-center">
+                    <CirclingLoader size="md" label="Loading portfolio holdings..." />
+                  </td>
+                </tr>
+              ) : filteredHoldings.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-xs text-[#94A3B8]">
                     No holdings in your portfolio yet. Buy stocks using the Order Entry Panel to build your positions.
@@ -253,22 +260,16 @@ export const PortfolioView: React.FC = () => {
                     <td className="py-2.5 px-3 text-center">
                       <div className="flex items-center justify-center space-x-1.5 font-sans">
                         <button
-                          onClick={() => {
-                            setActiveTicker(h.ticker);
-                            setOrderSide("BUY");
-                            setActiveTab("overview");
-                          }}
-                          className="px-2 py-1 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-white text-[10px] font-semibold"
+                          onClick={() => openOrderModal(h.ticker, "BUY")}
+                          className="px-2 py-1 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-white text-[10px] font-semibold transition-colors"
+                          title="Buy more shares"
                         >
                           Add
                         </button>
                         <button
-                          onClick={() => {
-                            setActiveTicker(h.ticker);
-                            setOrderSide("SELL");
-                            setActiveTab("overview");
-                          }}
-                          className="px-2 py-1 rounded bg-[#F04452] hover:bg-[#ff5a68] text-white text-[10px] font-semibold"
+                          onClick={() => openOrderModal(h.ticker, "SELL")}
+                          className="px-2 py-1 rounded bg-[#F04452] hover:bg-[#ff5a68] text-white text-[10px] font-semibold transition-colors"
+                          title="Sell/Exit position"
                         >
                           Exit
                         </button>

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { TradingChart } from "../chart/TradingChart";
+import { ErrorBoundary } from "../common/ErrorBoundary";
 import { OrderEntryPanel } from "../trading/OrderEntryPanel";
 import { MarketDepth } from "../trading/MarketDepth";
 import { SentimentGauge } from "../market/SentimentGauge";
@@ -158,7 +159,9 @@ export const MarketsView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column: Interactive Chart + Depth + Fundamentals */}
         <div className="lg:col-span-8 space-y-4">
-          <TradingChart ticker={activeTicker} />
+          <ErrorBoundary fallbackTitle="Interactive Trading Chart">
+            <TradingChart ticker={activeTicker} />
+          </ErrorBoundary>
 
           {/* Key Fundamentals Table */}
           <div className="nexus-card p-4">
@@ -194,25 +197,25 @@ export const MarketsView: React.FC = () => {
               <div className="p-2.5 rounded bg-[#0B1120] border border-[#26354B]/50">
                 <span className="text-[10px] text-[#94A3B8] block">Open Price</span>
                 <span className="font-bold text-[#F1F5FC] text-sm mt-0.5 block">
-                  ₹{details.open.toFixed(2)}
+                  ₹{(details.open || 0).toFixed(2)}
                 </span>
               </div>
               <div className="p-2.5 rounded bg-[#0B1120] border border-[#26354B]/50">
                 <span className="text-[10px] text-[#94A3B8] block">Prev. Close</span>
                 <span className="font-bold text-[#F1F5FC] text-sm mt-0.5 block">
-                  ₹{details.prevClose.toFixed(2)}
+                  ₹{(details.prevClose || 0).toFixed(2)}
                 </span>
               </div>
               <div className="p-2.5 rounded bg-[#0B1120] border border-[#26354B]/50">
                 <span className="text-[10px] text-[#94A3B8] block">Volume</span>
                 <span className="font-bold text-[#F1F5FC] text-sm mt-0.5 block">
-                  {(details.volume / 1000000).toFixed(2)}M
+                  {((details.volume || 0) / 1000000).toFixed(2)}M
                 </span>
               </div>
               <div className="p-2.5 rounded bg-[#0B1120] border border-[#26354B]/50">
                 <span className="text-[10px] text-[#94A3B8] block">Avg. Volume (30D)</span>
                 <span className="font-bold text-[#F1F5FC] text-sm mt-0.5 block">
-                  {(details.avgVolume / 1000000).toFixed(2)}M
+                  {((details.avgVolume || 0) / 1000000).toFixed(2)}M
                 </span>
               </div>
             </div>
@@ -234,7 +237,9 @@ export const MarketsView: React.FC = () => {
 
         {/* Right Column: AI Sentiment Engine + Order Placement Panel */}
         <div className="lg:col-span-4 space-y-4">
-          <SentimentGauge ticker={activeTicker} />
+          <ErrorBoundary fallbackTitle="AI Sentiment & Prediction Engine">
+            <SentimentGauge ticker={activeTicker} />
+          </ErrorBoundary>
           <OrderEntryPanel ticker={activeTicker} />
         </div>
       </div>

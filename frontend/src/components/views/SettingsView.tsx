@@ -181,7 +181,7 @@ export const SettingsView: React.FC = () => {
               Paper Trading Virtual Account
             </label>
             <p className="text-xs text-[#94A3B8] mb-3">
-              Reset virtual available margin back to starting capital (₹5,00,000.00).
+              Reset virtual available margin back to starting capital (₹10,00,000.00).
             </p>
 
             <button
@@ -189,13 +189,13 @@ export const SettingsView: React.FC = () => {
               className="flex items-center space-x-2 px-3.5 py-2 rounded-md bg-[#1A2940] hover:bg-[#26354B] text-[#F1F5FC] text-xs font-medium border border-[#26354B] transition-colors"
             >
               <RotateCcw size={14} />
-              <span>Reset Virtual Margin to ₹5,00,000</span>
+              <span>Reset Virtual Margin to ₹10,00,000</span>
             </button>
 
             {resetSuccess && (
               <div className="mt-2 text-xs text-[#00C087] flex items-center space-x-1">
                 <CheckCircle2 size={14} />
-                <span>Virtual trading balance has been reset to ₹5,00,000.00!</span>
+                <span>Virtual trading balance has been reset to ₹10,00,000.00!</span>
               </div>
             )}
           </div>

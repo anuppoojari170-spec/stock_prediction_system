@@ -14,13 +14,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../store/useAppStore";
 import { watchlistApi } from "../../services/api";
 import { WatchlistItem, WatchlistCategoryOut } from "../../types";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 export const WatchlistWidget: React.FC = () => {
   const queryClient = useQueryClient();
   const {
     activeTicker,
     setActiveTicker,
-    setOrderSide,
+    openOrderModal,
     liveTicks,
   } = useAppStore();
 
@@ -31,6 +32,7 @@ export const WatchlistWidget: React.FC = () => {
   const [newTickerInput, setNewTickerInput] = useState<string>("");
   const [newCatNameInput, setNewCatNameInput] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [deletingTicker, setDeletingTicker] = useState<string | null>(null);
 
   // 1. Fetch user's custom database categories
   const { data: categories = [], isLoading: isCatLoading } = useQuery<WatchlistCategoryOut[]>({
@@ -79,6 +81,7 @@ export const WatchlistWidget: React.FC = () => {
 
   const handleRemove = async (ticker: string) => {
     if (!activeCategory) return;
+    setDeletingTicker(ticker);
     try {
       await watchlistApi.remove(ticker, activeCategory);
       queryClient.invalidateQueries({
@@ -86,6 +89,8 @@ export const WatchlistWidget: React.FC = () => {
       });
     } catch (err) {
       console.error("Failed to remove stock:", err);
+    } finally {
+      setDeletingTicker(null);
     }
   };
 
@@ -238,8 +243,8 @@ export const WatchlistWidget: React.FC = () => {
           {/* Watchlist Items Scrollable List */}
           <div className="space-y-1 max-h-[320px] overflow-y-auto pr-1">
             {isListLoading ? (
-              <div className="py-8 text-center text-xs text-[#94A3B8]">
-                Loading watchlist...
+              <div className="py-8 flex flex-col items-center justify-center">
+                <CirclingLoader size="sm" label={`Loading ${activeCategory || "watchlist"}...`} />
               </div>
             ) : filteredItems.length === 0 ? (
               <div className="py-8 text-center space-y-2">
@@ -361,22 +366,20 @@ export const WatchlistWidget: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setActiveTicker(item.ticker);
-                          setOrderSide("BUY");
+                          openOrderModal(item.ticker, "BUY");
                         }}
                         className="px-2 py-1 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-white text-[10px] font-bold"
-                        title="Quick Buy"
+                        title="Quick Buy Order"
                       >
                         B
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setActiveTicker(item.ticker);
-                          setOrderSide("SELL");
+                          openOrderModal(item.ticker, "SELL");
                         }}
                         className="px-2 py-1 rounded bg-[#F04452] hover:bg-[#ff5a68] text-white text-[10px] font-bold"
-                        title="Quick Sell"
+                        title="Quick Sell Order"
                       >
                         S
                       </button>
@@ -385,10 +388,15 @@ export const WatchlistWidget: React.FC = () => {
                           e.stopPropagation();
                           handleRemove(item.ticker);
                         }}
-                        className="p-1 rounded text-[#94A3B8] hover:text-[#F04452]"
+                        disabled={deletingTicker === item.ticker}
+                        className="p-1 rounded text-[#94A3B8] hover:text-[#F04452] disabled:opacity-50"
                         title="Remove from list"
                       >
-                        <Trash2 size={12} />
+                        {deletingTicker === item.ticker ? (
+                          <CirclingLoader size="xs" color="text-[#F04452]" />
+                        ) : (
+                          <Trash2 size={12} />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -436,9 +444,16 @@ export const WatchlistWidget: React.FC = () => {
               <button
                 onClick={handleAddSecurity}
                 disabled={isSubmitting || !newTickerInput.trim()}
-                className="flex-1 py-1.5 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50"
+                className="flex-1 py-1.5 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50 flex items-center justify-center space-x-1.5"
               >
-                {isSubmitting ? "Adding..." : "Add"}
+                {isSubmitting ? (
+                  <>
+                    <CirclingLoader size="xs" color="text-white" />
+                    <span>Adding...</span>
+                  </>
+                ) : (
+                  <span>Add Security</span>
+                )}
               </button>
             </div>
           </div>
@@ -482,9 +497,16 @@ export const WatchlistWidget: React.FC = () => {
               <button
                 onClick={handleCreateCategory}
                 disabled={isSubmitting || !newCatNameInput.trim()}
-                className="flex-1 py-1.5 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50"
+                className="flex-1 py-1.5 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50 flex items-center justify-center space-x-1.5"
               >
-                {isSubmitting ? "Creating..." : "Create"}
+                {isSubmitting ? (
+                  <>
+                    <CirclingLoader size="xs" color="text-white" />
+                    <span>Creating...</span>
+                  </>
+                ) : (
+                  <span>Create</span>
+                )}
               </button>
             </div>
           </div>

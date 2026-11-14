@@ -3,11 +3,12 @@ import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { tradingApi } from "../../services/api";
 import { useAppStore } from "../../store/useAppStore";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 export const RecentOrdersWidget: React.FC = () => {
   const { setActiveTab } = useAppStore();
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [], isLoading } = useQuery({
     queryKey: ["userTransactions"],
     queryFn: () => tradingApi.getTransactions(5),
     refetchInterval: 10000,
@@ -44,7 +45,13 @@ export const RecentOrdersWidget: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#26354B]/30 font-mono-numbers">
-            {transactions.length > 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={6} className="py-6 text-center">
+                  <CirclingLoader size="sm" label="Loading recent executions..." />
+                </td>
+              </tr>
+            ) : transactions.length > 0 ? (
               transactions.slice(0, 5).map((t) => {
                 const isBuy = t.type?.toUpperCase() !== "SELL";
                 let timeStr = "Recently";

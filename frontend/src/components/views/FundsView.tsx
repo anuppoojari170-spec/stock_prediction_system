@@ -9,6 +9,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { tradingApi, authApi } from "../../services/api";
 import { useAuthStore } from "../../store/useAuthStore";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 export const FundsView: React.FC = () => {
   const queryClient = useQueryClient();
@@ -164,7 +165,11 @@ export const FundsView: React.FC = () => {
               className="p-2 rounded-md bg-[#1A2940] hover:bg-[#26354B] text-[#94A3B8] hover:text-[#F1F5FC] transition-colors"
               title="Reset Virtual Funds to ₹10,00,000"
             >
-              <RotateCcw size={16} />
+              {actionLoading ? (
+                <CirclingLoader size="sm" color="text-[#386BFF]" />
+              ) : (
+                <RotateCcw size={16} />
+              )}
             </button>
           </div>
         </div>
@@ -294,9 +299,16 @@ export const FundsView: React.FC = () => {
                   <button
                     onClick={handleDeposit}
                     disabled={actionLoading}
-                    className="flex-1 py-2 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50"
+                    className="flex-1 py-2 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50 flex items-center justify-center space-x-1.5"
                   >
-                    {actionLoading ? "Crediting..." : "Confirm Deposit"}
+                    {actionLoading ? (
+                      <>
+                        <CirclingLoader size="xs" color="text-white" />
+                        <span>Crediting...</span>
+                      </>
+                    ) : (
+                      <span>Confirm Deposit</span>
+                    )}
                   </button>
                 </div>
               </div>

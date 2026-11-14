@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { X, Lock, Mail, User as UserIcon, AlertCircle } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
 import { authApi } from "../../services/api";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, authModalMode, closeAuthModal, openAuthModal, setToken, setUser } =
@@ -71,7 +72,7 @@ export const AuthModal: React.FC = () => {
           <p className="text-xs text-[#94A3B8] mt-1">
             {authModalMode === "login"
               ? "Access your live NSE/BSE trading terminal and portfolio."
-              : "Sign up and receive ₹5,00,000 in virtual paper trading margin."}
+              : "Sign up and receive ₹10,00,000 in virtual paper trading margin."}
           </p>
         </div>
 
@@ -154,9 +155,18 @@ export const AuthModal: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 rounded-md bg-[#386BFF] py-2.5 text-xs font-semibold text-white hover:bg-[#4C7DFF] focus:outline-none disabled:opacity-50 transition shadow-lg shadow-[#386BFF]/25"
+            className="w-full mt-2 rounded-md bg-[#386BFF] py-2.5 text-xs font-semibold text-white hover:bg-[#4C7DFF] focus:outline-none disabled:opacity-50 transition shadow-lg shadow-[#386BFF]/25 flex items-center justify-center space-x-2"
           >
-            {loading ? "Processing..." : authModalMode === "login" ? "Sign In to Terminal" : "Create Account & Start Trading"}
+            {loading ? (
+              <>
+                <CirclingLoader size="xs" color="text-white" />
+                <span>Processing...</span>
+              </>
+            ) : authModalMode === "login" ? (
+              "Sign In to Terminal"
+            ) : (
+              "Create Account & Start Trading"
+            )}
           </button>
         </form>
 

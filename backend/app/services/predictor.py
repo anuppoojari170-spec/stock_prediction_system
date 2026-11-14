@@ -7,19 +7,32 @@ import pandas as pd
 from app.core.cache import market_cache
 from app.services.market_data import market_service, TRACKED_UNIVERSE
 from app.services.ml_forecaster import ml_forecaster
+from app.services.ai_assistant import ai_assistant
 
-# Keywords for financial news NLP scoring
+# Keywords and phrases for financial news NLP scoring
 BULLISH_KEYWORDS = {
     "surge", "profit", "growth", "record", "order", "acquisition", "deal",
     "beat", "dividend", "expansion", "bullish", "rally", "outperform",
-    "upgrade", "jump", "high", "positive", "strong", "win", "gain"
+    "upgrade", "jump", "high", "positive", "strong", "win", "gain", "breakout"
 }
 
 BEARISH_KEYWORDS = {
     "plunge", "loss", "decline", "fall", "drop", "probe", "downgrade",
     "debt", "default", "scam", "bearish", "inflation", "weak", "penalty",
-    "tumble", "cut", "risk", "slump", "concern", "miss"
+    "tumble", "cut", "risk", "slump", "concern", "miss", "fraud"
 }
+
+BULLISH_PHRASES = [
+    "all-time high", "order win", "profit jumps", "margin expansion",
+    "debt free", "dividend hike", "upgraded to buy", "beats estimate",
+    "revenue surges", "loss narrows", "target raised", "strong demand"
+]
+
+BEARISH_PHRASES = [
+    "margin compression", "profit falls", "sebi probe", "downgraded to sell",
+    "misses estimate", "debt default", "penalty imposed", "fraud probe",
+    "revenue drops", "growth slows", "target cut", "guidance lowered"
+]
 
 
 def compute_rsi(close_series: pd.Series, period: int = 14) -> float:
@@ -275,33 +288,50 @@ def get_market_news_feed(limit: int = 12) -> List[Dict[str, Any]]:
 
 
 def analyze_news_sentiment(ticker: str) -> Dict[str, Any]:
-    """Analyze real-time news headlines dynamically for ANY Indian stock using NLP sentiment scoring."""
+    """Analyze real-time news headlines dynamically for ANY Indian stock using NLP sentiment scoring with n-gram & negation awareness."""
     clean = ticker.strip().upper().replace(".NS", "")
     headlines = fetch_live_headlines(clean)
 
     scores = []
     for h in headlines:
-        words = set(h.lower().replace("-", " ").replace(".", " ").replace(":", " ").split())
-        bull_hits = len(words.intersection(BULLISH_KEYWORDS))
-        bear_hits = len(words.intersection(BEARISH_KEYWORDS))
-        diff = bull_hits - bear_hits
-        scores.append(diff)
+        h_lower = h.lower()
+        score = 0.0
+
+        # Check multi-word financial phrases (higher weight)
+        for phrase in BULLISH_PHRASES:
+            if phrase in h_lower:
+                score += 1.5
+        for phrase in BEARISH_PHRASES:
+            if phrase in h_lower:
+                score -= 1.5
+
+        # Check individual words with basic negation awareness
+        words = h_lower.replace("-", " ").replace(".", " ").replace(":", " ").replace(",", " ").split()
+        for idx, w in enumerate(words):
+            is_negated = idx > 0 and words[idx - 1] in {"not", "no", "never", "hardly", "less", "fails", "failed"}
+            if w in BULLISH_KEYWORDS:
+                score += -1.0 if is_negated else 1.0
+            elif w in BEARISH_KEYWORDS:
+                score += 1.0 if is_negated else -1.0
+
+        scores.append(score)
 
     avg_score = float(np.mean(scores)) if scores else 0.0
+    normalized_score = max(-1.0, min(1.0, avg_score / 2.0))
 
-    if avg_score > 0.15:
+    if normalized_score > 0.15:
         sentiment = "BULLISH"
-        summary = f"Positive market coverage for {clean} with healthy corporate developments."
-    elif avg_score < -0.15:
+        summary = f"Positive market coverage for {clean} with healthy corporate developments and institutional demand."
+    elif normalized_score < -0.15:
         sentiment = "BEARISH"
-        summary = f"Cautious market news tone for {clean} driven by macro headwinds or margin pressures."
+        summary = f"Cautious market news tone for {clean} driven by macro headwinds, margin pressures, or regulatory scrutiny."
     else:
         sentiment = "NEUTRAL"
         summary = f"Balanced market coverage with neutral corporate guidance for {clean}."
 
     return {
         "sentiment": sentiment,
-        "score": round(avg_score, 2),
+        "score": round(normalized_score, 2),
         "summary": summary,
         "headline_count": len(headlines),
         "sample_headline": headlines[0] if headlines else "",
@@ -469,7 +499,7 @@ def predict_stock(ticker: str) -> Dict[str, Any]:
             news_sentiment_score=news_score,
         )
 
-    return {
+    result = {
         "ticker": clean_ticker,
         "current_price": round(latest, 2),
         "signal": signal,
@@ -487,6 +517,14 @@ def predict_stock(ticker: str) -> Dict[str, Any]:
         "breakdown": breakdown,
         "ml_forecast": ml_forecast,
     }
+
+    # Synthesize AI Trade Commentary & Catalyst Thesis
+    try:
+        result["commentary"] = ai_assistant.generate_commentary(result)
+    except Exception:
+        result["commentary"] = None
+
+    return result
 
 
 def _calculate_risk(df: pd.DataFrame, window: int = 20) -> Dict[str, Any]:
@@ -518,14 +556,22 @@ def get_chart_candles(ticker: str, period: str = "3mo") -> List[Dict[str, Any]]:
 
     for _, row in df.iterrows():
         try:
+            if pd.isna(row["Open"]) or pd.isna(row["High"]) or pd.isna(row["Low"]) or pd.isna(row["Close"]):
+                continue
+            o = float(row["Open"])
+            h = float(row["High"])
+            l = float(row["Low"])
+            c = float(row["Close"])
+            if np.isnan(o) or np.isnan(h) or np.isnan(l) or np.isnan(c) or o <= 0:
+                continue
             d = row[date_col]
             time_str = d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d)[:10]
             candles.append({
                 "time": time_str,
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
+                "open": round(o, 2),
+                "high": round(h, 2),
+                "low": round(l, 2),
+                "close": round(c, 2),
                 "volume": float(row["Volume"]) if "Volume" in row and not pd.isna(row["Volume"]) else 0.0,
             })
         except Exception:

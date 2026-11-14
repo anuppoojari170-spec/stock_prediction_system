@@ -4,43 +4,33 @@ import {
   Bell,
   Sun,
   Moon,
-  Zap,
-  ShieldCheck,
-  Wallet,
   User as UserIcon,
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { useAuthStore } from "../../store/useAuthStore";
-import { ExchangeType } from "../../types";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { tradingApi } from "../../services/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { marketApi } from "../../services/api";
 
 const popularStocks = [
-  { ticker: "RELIANCE", name: "Reliance Industries Ltd", price: 1330.00, changePct: 1.15 },
-  { ticker: "TCS", name: "Tata Consultancy Services", price: 3700.00, changePct: 0.95 },
-  { ticker: "HDFCBANK", name: "HDFC Bank Limited", price: 1750.00, changePct: -0.42 },
-  { ticker: "INFY", name: "Infosys Limited", price: 1550.00, changePct: 1.24 },
-  { ticker: "ICICIBANK", name: "ICICI Bank Limited", price: 1270.00, changePct: 1.16 },
-  { ticker: "BHARTIARTL", name: "Bharti Airtel Limited", price: 1600.00, changePct: 0.39 },
-  { ticker: "SBIN", name: "State Bank of India", price: 820.00, changePct: -0.50 },
-  { ticker: "TATAMOTORS", name: "Tata Motors Limited", price: 790.00, changePct: 1.29 },
+  { ticker: "RELIANCE", name: "Reliance Industries Ltd", price: 1339.70, changePct: 0.00 },
+  { ticker: "TCS", name: "Tata Consultancy Services", price: 2407.50, changePct: -1.43 },
+  { ticker: "INFY", name: "Infosys Limited", price: 1141.50, changePct: -0.84 },
+  { ticker: "HDFCBANK", name: "HDFC Bank Limited", price: 804.00, changePct: -1.02 },
+  { ticker: "ICICIBANK", name: "ICICI Bank Limited", price: 1583.60, changePct: -0.40 },
+  { ticker: "BHARTIARTL", name: "Bharti Airtel Limited", price: 2106.00, changePct: 0.48 },
+  { ticker: "SBIN", name: "State Bank of India", price: 1080.00, changePct: -0.60 },
+  { ticker: "LT", name: "Larsen & Toubro Ltd", price: 4143.80, changePct: -0.37 },
 ];
 
 
 export const TopNavbar: React.FC = () => {
   const {
-    mode,
-    setMode,
     theme,
     setTheme,
-    exchange,
-    setExchange,
     activeTicker,
     setActiveTicker,
-    virtualBalance,
-    setActiveTab,
     wsStatus,
     liveTicks,
   } = useAppStore();
@@ -49,12 +39,6 @@ export const TopNavbar: React.FC = () => {
 
   const { user, openAuthModal, logout } = useAuthStore();
   const queryClient = useQueryClient();
-  const { data: summary } = useQuery({
-    queryKey: ["portfolioSummary"],
-    queryFn: () => tradingApi.getSummary(),
-    enabled: Boolean(user),
-  });
-  const displayBalance = summary?.balance ?? user?.balance ?? virtualBalance;
 
   const handleLogout = () => {
     logout();
@@ -64,10 +48,13 @@ export const TopNavbar: React.FC = () => {
   // Search flyout state
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{ ticker: string; companyName: string }[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
   // Notification menu state
   const [notifOpen, setNotifOpen] = useState(false);
+  const [hasUnreadNotifs, setHasUnreadNotifs] = useState(true);
   const notifRef = useRef<HTMLDivElement>(null);
 
   // IST Clock & Market Status state
@@ -102,6 +89,36 @@ export const TopNavbar: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // Debounced dynamic search across all 2,600+ NSE stocks
+  useEffect(() => {
+    const cleanQ = query.trim();
+    if (!cleanQ) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      marketApi
+        .searchStocks(cleanQ, 15)
+        .then((res) => {
+          if (isMounted) {
+            setSearchResults(res);
+            setIsSearching(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setIsSearching(false);
+        });
+    }, 150);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
 
   // Close search/notifs when clicking outside
   useEffect(() => {
@@ -117,12 +134,6 @@ export const TopNavbar: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredStocks = popularStocks.filter(
-    (s) =>
-      s.ticker.toLowerCase().includes(query.toLowerCase()) ||
-      s.name.toLowerCase().includes(query.toLowerCase())
-  );
-
   const handleSelectStock = (ticker: string) => {
     setActiveTicker(ticker);
     setSearchOpen(false);
@@ -131,30 +142,13 @@ export const TopNavbar: React.FC = () => {
 
   return (
     <header className="h-16 bg-[#0D1627] border-b border-[#26354B] px-4 flex items-center justify-between select-none z-30 relative">
-      {/* Left: Tagline & Exchange Switcher */}
+      {/* Left: Tagline & Market Status */}
       <div className="flex items-center space-x-4">
         <div className="hidden xl:flex flex-col">
           <span className="text-[11px] font-semibold tracking-wider uppercase text-[#386BFF]">
             TRADE AI PILOT
           </span>
           <span className="text-xs text-[#94A3B8]">Trade Smarter. AI-Powered Precision.</span>
-        </div>
-
-        {/* NSE / BSE Toggle Pill */}
-        <div className="flex items-center p-0.5 bg-[#111C30] border border-[#26354B] rounded-md text-xs font-medium">
-          {(["NSE", "BSE"] as ExchangeType[]).map((ex) => (
-            <button
-              key={ex}
-              onClick={() => setExchange(ex)}
-              className={`px-3 py-1 rounded transition-colors ${
-                exchange === ex
-                  ? "bg-[#386BFF] text-white shadow-sm"
-                  : "text-[#94A3B8] hover:text-[#F1F5FC]"
-              }`}
-            >
-              {ex}
-            </button>
-          ))}
         </div>
 
         {/* Live IST Clock & Market Status */}
@@ -174,23 +168,16 @@ export const TopNavbar: React.FC = () => {
           </span>
         </div>
 
-
-        {/* Real-Time WebSocket Market Stream Indicator */}
+        {/* WebSocket Live Stream Indicator */}
         <div
-          className={`hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono border ${
+          className={`hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded border text-xs font-mono ${
             wsStatus === "connected"
-              ? "bg-[#00C087]/10 border-[#00C087]/30 text-[#00C087]"
+              ? "bg-[#00C087]/10 text-[#00C087] border-[#00C087]/30"
               : wsStatus === "connecting"
-              ? "bg-[#F5B942]/10 border-[#F5B942]/30 text-[#F5B942]"
-              : "bg-[#F04452]/10 border-[#F04452]/30 text-[#F04452]"
+              ? "bg-[#F5B942]/10 text-[#F5B942] border-[#F5B942]/30"
+              : "bg-[#F04452]/10 text-[#F04452] border-[#F04452]/30"
           }`}
-          title={
-            wsStatus === "connected"
-              ? "Connected to live sub-second market data stream"
-              : wsStatus === "connecting"
-              ? "Connecting to market WebSocket stream..."
-              : "Stream disconnected. Auto-reconnecting..."
-          }
+          title={`Market streaming server: ${wsStatus}`}
         >
           <span
             className={`w-2 h-2 rounded-full ${
@@ -246,22 +233,76 @@ export const TopNavbar: React.FC = () => {
               setQuery(e.target.value);
               setSearchOpen(true);
             }}
-            className="w-full pl-9 pr-10 py-1.5 bg-[#111C30] border border-[#26354B] rounded-md text-xs text-[#F1F5FC] placeholder-[#64748B] focus:outline-none focus:border-[#386BFF] transition-colors"
+            className="w-full bg-[#111C30] border border-[#26354B] rounded-lg pl-9 pr-8 py-1.5 text-xs text-[#F1F5FC] placeholder-[#64748B] focus:outline-none focus:border-[#386BFF] transition-colors"
           />
-          <kbd className="hidden sm:inline-block absolute right-2.5 px-1.5 py-0.5 text-[10px] text-[#94A3B8] bg-[#1A2940] rounded border border-[#26354B]">
+          <span className="absolute right-2.5 px-1.5 py-0.5 rounded bg-[#1A2940] text-[10px] font-mono text-[#64748B] border border-[#26354B]">
             /
-          </kbd>
+          </span>
         </div>
 
-        {/* Search Results Dropdown */}
+        {/* Dropdown Search Results */}
         {searchOpen && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-[#111C30] border border-[#26354B] rounded-md shadow-2xl overflow-hidden z-50">
-            <div className="p-2 border-b border-[#26354B] text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8]">
-              {query ? "Search Results" : "Top Traded Indian Stocks"}
+          <div className="absolute top-full left-0 right-0 mt-2 bg-[#111C30] border border-[#26354B] rounded-lg shadow-2xl overflow-hidden z-50">
+            <div className="px-3 py-2 text-[11px] font-semibold text-[#94A3B8] border-b border-[#26354B] uppercase tracking-wider bg-[#0B1120] flex items-center justify-between">
+              <span>{query.trim() ? "NSE Search Results" : "Top Traded Indian Stocks"}</span>
+              <span className="text-[9px] font-mono text-[#386BFF]">2,600+ Stocks</span>
             </div>
-            <div className="max-h-64 overflow-y-auto">
-              {filteredStocks.length > 0 ? (
-                filteredStocks.map((stock) => {
+            <div className="max-h-72 overflow-y-auto">
+              {query.trim() ? (
+                isSearching ? (
+                  <div className="p-4 text-center text-xs text-[#94A3B8] flex items-center justify-center space-x-2">
+                    <div className="w-3.5 h-3.5 border-2 border-[#386BFF] border-t-transparent rounded-full animate-spin" />
+                    <span>Searching NSE database...</span>
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  searchResults.map((stock) => {
+                    const live = liveTicks[stock.ticker];
+                    return (
+                      <div
+                        key={stock.ticker}
+                        onClick={() => handleSelectStock(stock.ticker)}
+                        className="flex items-center justify-between px-3 py-2 hover:bg-[#1A2940] cursor-pointer transition-colors border-b border-[#26354B]/30 last:border-b-0"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <div className="text-xs font-semibold text-[#F1F5FC] flex items-center space-x-1.5">
+                            <span>{stock.ticker}</span>
+                            <span className="px-1 py-0.2 rounded text-[9px] font-mono bg-[#1A2940] text-[#386BFF] border border-[#26354B]">
+                              NSE
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-[#94A3B8] truncate max-w-[240px]">
+                            {stock.companyName}
+                          </div>
+                        </div>
+                        {live ? (
+                          <div className="text-right font-mono-numbers flex-shrink-0">
+                            <div className="text-xs font-medium text-[#F1F5FC]">
+                              ₹{live.price.toFixed(2)}
+                            </div>
+                            <div
+                              className={`text-[10px] font-semibold ${
+                                live.change_pct >= 0 ? "text-[#00C087]" : "text-[#F04452]"
+                              }`}
+                            >
+                              {live.change_pct >= 0 ? "+" : ""}
+                              {live.change_pct.toFixed(2)}%
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-[#64748B] font-mono flex-shrink-0">
+                            Select Stock
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-4 text-center text-xs text-[#94A3B8]">
+                    No matching NSE securities found for "{query}".
+                  </div>
+                )
+              ) : (
+                popularStocks.map((stock) => {
                   const live = liveTicks[stock.ticker];
                   const displayPrice = live ? live.price : stock.price;
                   const displayPct = live ? live.change_pct : stock.changePct;
@@ -295,33 +336,14 @@ export const TopNavbar: React.FC = () => {
                     </div>
                   );
                 })
-              ) : (
-
-                <div className="p-4 text-center text-xs text-[#94A3B8]">
-                  No matching NSE/BSE securities found.
-                </div>
               )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Right Controls: Mode Toggle, Theme Toggle, Notifications, Funds, User Profile */}
+      {/* Right Controls: Theme Toggle, Notifications, User Profile */}
       <div className="flex items-center space-x-3">
-        {/* Beginner / Pro Mode Pill */}
-        <button
-          onClick={() => setMode(mode === "pro" ? "beginner" : "pro")}
-          className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-all border ${
-            mode === "pro"
-              ? "bg-[#386BFF]/15 text-[#386BFF] border-[#386BFF]/40"
-              : "bg-[#7657F6]/15 text-[#7657F6] border-[#7657F6]/40"
-          }`}
-          title="Toggle Beginner / Pro Interface"
-        >
-          {mode === "pro" ? <Zap size={13} /> : <ShieldCheck size={13} />}
-          <span>{mode === "pro" ? "PRO MODE" : "BEGINNER"}</span>
-        </button>
-
         {/* Light / Dark Theme Switcher */}
         <button
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -336,9 +358,12 @@ export const TopNavbar: React.FC = () => {
           <button
             onClick={() => setNotifOpen(!notifOpen)}
             className="p-1.5 rounded-md text-[#94A3B8] hover:text-[#F1F5FC] hover:bg-[#111C30] relative border border-transparent hover:border-[#26354B] transition-colors"
+            title="Market Alerts"
           >
             <Bell size={17} />
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#386BFF]"></span>
+            {hasUnreadNotifs && (
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#386BFF]"></span>
+            )}
           </button>
 
           {notifOpen && (
@@ -347,9 +372,16 @@ export const TopNavbar: React.FC = () => {
                 <span className="text-xs font-semibold text-[#F1F5FC]">
                   Market Alerts & Updates
                 </span>
-                <span className="text-[10px] text-[#386BFF] cursor-pointer hover:underline">
-                  Mark all read
-                </span>
+                {hasUnreadNotifs ? (
+                  <button
+                    onClick={() => setHasUnreadNotifs(false)}
+                    className="text-[10px] text-[#386BFF] hover:underline"
+                  >
+                    Mark all read
+                  </button>
+                ) : (
+                  <span className="text-[10px] text-[#00C087] font-medium">All caught up</span>
+                )}
               </div>
               <div className="space-y-2.5 mt-2.5 max-h-60 overflow-y-auto text-xs">
                 <div className="p-2 rounded bg-[#0B1120] border border-[#26354B]/50 flex items-start space-x-2">
@@ -379,27 +411,6 @@ export const TopNavbar: React.FC = () => {
           )}
         </div>
 
-        {/* Virtual Available Funds Pill */}
-        <div
-          onClick={() => setActiveTab("funds")}
-          className="hidden md:flex items-center space-x-2 px-3 py-1 bg-[#111C30] hover:bg-[#1A2940] border border-[#26354B] rounded-md cursor-pointer transition-colors"
-          title="Click to view Funds & Margin"
-        >
-          <Wallet size={15} className="text-[#386BFF]" />
-          <div className="flex flex-col text-left font-mono-numbers">
-            <span className="text-[10px] text-[#94A3B8] uppercase font-sans">
-              Margin Avail.
-            </span>
-            <span className="text-xs font-semibold text-[#F1F5FC]">
-              ₹
-              {displayBalance.toLocaleString("en-IN", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </span>
-          </div>
-        </div>
-
         {/* User Account / Login */}
         {user ? (
           <div className="flex items-center space-x-2">
@@ -419,7 +430,7 @@ export const TopNavbar: React.FC = () => {
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#386BFF] hover:bg-[#4C7DFF] text-white text-xs font-medium shadow-md shadow-[#386BFF]/20 transition-all"
           >
             <UserIcon size={14} />
-            <span>Sign In</span>
+            <span>Login</span>
           </button>
         )}
       </div>

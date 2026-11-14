@@ -145,6 +145,35 @@ export interface MLForecastData {
   forecast_points: ForecastPoint[];
 }
 
+export interface AICommentaryResponse {
+  ticker: string;
+  headline: string;
+  thesis: string;
+  catalysts: string[];
+  risks: string[];
+  beginner_takeaway: string;
+  provider: string;
+}
+
+export interface AIChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AIChatRequest {
+  message: string;
+  ticker?: string;
+  conversation?: AIChatMessage[];
+  mode?: "beginner" | "pro";
+}
+
+export interface AIChatResponse {
+  reply: string;
+  suggested_actions?: string[];
+  ticker?: string;
+  provider: string;
+}
+
 export interface Prediction {
   ticker: string;
   current_price: number;
@@ -162,6 +191,7 @@ export interface Prediction {
   trade_plan?: TradePlan;
   breakdown?: IndicatorSignal[];
   ml_forecast?: MLForecastData;
+  commentary?: AICommentaryResponse;
 }
 
 export interface MarketDepthLevel {
