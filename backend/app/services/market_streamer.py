@@ -1,5 +1,4 @@
 import asyncio
-import datetime
 import logging
 import random
 import time
@@ -8,30 +7,32 @@ from app.services.websocket_manager import ws_manager
 
 logger = logging.getLogger("TradeAIPilot.Streamer")
 
-# Reference base prices for Indian equities (NSE)
-INITIAL_STOCK_STATE: Dict[str, dict] = {
-    "RELIANCE": {"price": 2984.50, "prev_close": 2946.30, "volume": 6840000, "spread": 0.50},
-    "TCS": {"price": 4120.75, "prev_close": 4075.45, "volume": 2150000, "spread": 0.50},
-    "HDFCBANK": {"price": 1742.30, "prev_close": 1750.70, "volume": 12400000, "spread": 0.25},
-    "INFY": {"price": 1865.10, "prev_close": 1842.30, "volume": 5420000, "spread": 0.25},
-    "ICICIBANK": {"price": 1268.90, "prev_close": 1254.40, "volume": 8900000, "spread": 0.20},
-    "BHARTIARTL": {"price": 1595.60, "prev_close": 1589.40, "volume": 3700000, "spread": 0.25},
-    "SBIN": {"price": 818.40, "prev_close": 822.50, "volume": 9210000, "spread": 0.15},
-    "TATAMOTORS": {"price": 988.40, "prev_close": 975.80, "volume": 7820000, "spread": 0.20},
-    "ITC": {"price": 476.85, "prev_close": 474.90, "volume": 7100000, "spread": 0.10},
-    "WIPRO": {"price": 564.30, "prev_close": 566.40, "volume": 4150000, "spread": 0.10},
-    "BAJFINANCE": {"price": 6920.00, "prev_close": 6850.00, "volume": 1200000, "spread": 1.00},
-    "KOTAKBANK": {"price": 1785.20, "prev_close": 1779.60, "volume": 3100000, "spread": 0.30},
-    "LT": {"price": 3640.00, "prev_close": 3610.00, "volume": 1850000, "spread": 0.50},
-    "AXISBANK": {"price": 1195.40, "prev_close": 1203.20, "volume": 4500000, "spread": 0.20},
-    "HINDUNILVR": {"price": 2480.00, "prev_close": 2492.00, "volume": 1400000, "spread": 0.50},
-    "MARUTI": {"price": 11450.00, "prev_close": 11380.00, "volume": 650000, "spread": 2.00},
-    "ASIANPAINT": {"price": 2890.00, "prev_close": 2875.00, "volume": 1100000, "spread": 0.50},
-    "HCLTECH": {"price": 1824.60, "prev_close": 1806.20, "volume": 2800000, "spread": 0.25},
-    "LTIM": {"price": 5940.00, "prev_close": 5855.00, "volume": 850000, "spread": 1.00},
+# Tickers tracked by the streamer
+_TICKERS = [
+    "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "BHARTIARTL",
+    "SBIN", "TATAMOTORS", "ITC", "WIPRO", "BAJFINANCE", "KOTAKBANK",
+    "LT", "AXISBANK", "HINDUNILVR", "MARUTI", "ASIANPAINT", "HCLTECH", "LTIM",
+]
+
+# Spread sizes per ticker
+_SPREADS: Dict[str, float] = {
+    "RELIANCE": 0.50, "TCS": 0.50, "HDFCBANK": 0.25, "INFY": 0.25,
+    "ICICIBANK": 0.20, "BHARTIARTL": 0.25, "SBIN": 0.15, "TATAMOTORS": 0.20,
+    "ITC": 0.10, "WIPRO": 0.10, "BAJFINANCE": 1.00, "KOTAKBANK": 0.30,
+    "LT": 0.50, "AXISBANK": 0.20, "HINDUNILVR": 0.50, "MARUTI": 2.00,
+    "ASIANPAINT": 0.50, "HCLTECH": 0.25, "LTIM": 1.00,
 }
 
-INITIAL_INDICES: Dict[str, dict] = {
+_BASE_VOLUMES: Dict[str, int] = {
+    "RELIANCE": 6840000, "TCS": 2150000, "HDFCBANK": 12400000, "INFY": 5420000,
+    "ICICIBANK": 8900000, "BHARTIARTL": 3700000, "SBIN": 9210000, "TATAMOTORS": 7820000,
+    "ITC": 7100000, "WIPRO": 4150000, "BAJFINANCE": 1200000, "KOTAKBANK": 3100000,
+    "LT": 1850000, "AXISBANK": 4500000, "HINDUNILVR": 1400000, "MARUTI": 650000,
+    "ASIANPAINT": 1100000, "HCLTECH": 2800000, "LTIM": 850000,
+}
+
+# Static index seeds (indices are harder to get from yfinance reliably in real-time)
+_INITIAL_INDICES: Dict[str, dict] = {
     "NIFTY 50": {"value": 24345.80, "prev_close": 24200.60},
     "SENSEX": {"value": 79890.15, "prev_close": 79469.65},
     "BANK NIFTY": {"value": 51780.40, "prev_close": 51890.65},
@@ -41,8 +42,64 @@ INITIAL_INDICES: Dict[str, dict] = {
 }
 
 
+def _fetch_real_prices() -> Dict[str, float]:
+    """Fetch real current prices from yfinance for all tracked tickers.
+    Returns a dict of ticker -> price. Falls back gracefully per-ticker."""
+    try:
+        import yfinance as yf
+        import pandas as pd
+
+        symbols = [f"{t}.NS" for t in _TICKERS]
+        logger.info("MarketStreamer: fetching real prices from yfinance for %d tickers...", len(symbols))
+        data = yf.download(
+            tickers=symbols,
+            period="2d",
+            interval="1d",
+            group_by="ticker",
+            threads=True,
+            progress=False,
+            auto_adjust=True,
+        )
+
+        prices: Dict[str, float] = {}
+        for ticker in _TICKERS:
+            sym = f"{ticker}.NS"
+            try:
+                if isinstance(data.columns, pd.MultiIndex):
+                    if sym in data.columns.get_level_values(0):
+                        close_col = data[sym]["Close"].dropna()
+                        if not close_col.empty:
+                            prices[ticker] = round(float(close_col.iloc[-1]), 2)
+                            continue
+                else:
+                    close_col = data["Close"].dropna()
+                    if not close_col.empty:
+                        prices[ticker] = round(float(close_col.iloc[-1]), 2)
+                        continue
+            except Exception:
+                pass
+            # Per-ticker fallback: try individually
+            try:
+                stock = yf.Ticker(sym)
+                df = stock.history(period="2d")
+                if not df.empty:
+                    prices[ticker] = round(float(df["Close"].iloc[-1]), 2)
+                    continue
+            except Exception:
+                pass
+
+        logger.info("MarketStreamer: fetched real prices for %d / %d tickers", len(prices), len(_TICKERS))
+        return prices
+    except Exception as e:
+        logger.warning("MarketStreamer: yfinance batch fetch failed (%s), using fallbacks", e)
+        return {}
+
+
 class MarketStreamer:
-    """Simulates realistic high-frequency market data streaming and L2 Order Book depth."""
+    """Streams realistic high-frequency tick data seeded with REAL yfinance prices.
+    Prices are anchored to the actual market price at startup, then micro-ticked
+    realistically within ±8% intraday bands around that real open price.
+    """
 
     def __init__(self):
         self.stocks: Dict[str, dict] = {}
@@ -52,27 +109,46 @@ class MarketStreamer:
         self._init_state()
 
     def _init_state(self):
-        for ticker, data in INITIAL_STOCK_STATE.items():
-            price = data["price"]
-            prev = data["prev_close"]
-            spread = data["spread"]
+        # --- Seed stock prices from REAL yfinance data ---
+        real_prices = _fetch_real_prices()
+
+        from app.services.market_data import FALLBACK_PRICES  # import here to avoid circular at module load
+
+        for ticker in _TICKERS:
+            spread = _SPREADS.get(ticker, 0.25)
+            base_vol = _BASE_VOLUMES.get(ticker, 2000000)
+
+            # Use real price; fall back to FALLBACK_PRICES if yfinance failed for this ticker
+            price = real_prices.get(ticker) or FALLBACK_PRICES.get(ticker, 1500.0)
+
+            # Estimate prev_close as ~0.5-1% below current (we don't have yesterday's close
+            # from the batch download easily, so approximate it)
+            prev = round(price * random.uniform(0.990, 1.005), 2)
+
             self.stocks[ticker] = {
                 "ticker": ticker,
                 "price": price,
                 "open": round(prev * (1.0 + random.uniform(-0.003, 0.004)), 2),
-                "high": round(price * 1.008, 2),
-                "low": round(price * 0.992, 2),
+                "high": round(price * 1.004, 2),
+                "low": round(price * 0.996, 2),
                 "prev_close": prev,
                 "change": round(price - prev, 2),
                 "change_pct": round(((price - prev) / prev) * 100, 2),
-                "volume": data["volume"],
+                "volume": base_vol,
                 "bid": round(price - spread / 2, 2),
                 "ask": round(price + spread / 2, 2),
                 "spread": spread,
                 "direction": "up" if price >= prev else "down",
             }
 
-        for name, data in INITIAL_INDICES.items():
+        logger.info(
+            "MarketStreamer: initialized with real prices. Sample — RELIANCE: ₹%s, TCS: ₹%s",
+            self.stocks.get("RELIANCE", {}).get("price", "N/A"),
+            self.stocks.get("TCS", {}).get("price", "N/A"),
+        )
+
+        # --- Seed indices (static seed, then streamed) ---
+        for name, data in _INITIAL_INDICES.items():
             val = data["value"]
             prev = data["prev_close"]
             chg = round(val - prev, 2)
@@ -128,7 +204,7 @@ class MarketStreamer:
         old_price = st["price"]
         spread = st["spread"]
 
-        # Realistic tick variation (-0.12% to +0.12% micro-movement)
+        # Realistic tick variation (±0.06% micro-movement with slight upward bias)
         pct_delta = random.gauss(0.00005, 0.0006)
         tick_increment = 0.05 if old_price < 1000 else (0.10 if old_price < 3000 else 0.25)
 
@@ -136,7 +212,7 @@ class MarketStreamer:
         # Snap to valid tick size
         new_price = round(round(raw_price / tick_increment) * tick_increment, 2)
 
-        # Prevent runaway stray movements beyond intraday bands
+        # Prevent runaway drift beyond intraday bands (±8% from open)
         open_price = st["open"]
         if new_price > open_price * 1.08:
             new_price = round(open_price * 1.08, 2)
@@ -181,7 +257,7 @@ class MarketStreamer:
         # Broadcast tick
         await ws_manager.broadcast_json(payload, ticker=ticker)
 
-        # Occasionally broadcast updated L2 depth for this ticker (30% chance on tick)
+        # Occasionally broadcast updated L2 depth for this ticker (35% chance on tick)
         if random.random() < 0.35:
             depth_payload = {
                 "type": "DEPTH",
@@ -283,4 +359,3 @@ class MarketStreamer:
 
 
 market_streamer = MarketStreamer()
-

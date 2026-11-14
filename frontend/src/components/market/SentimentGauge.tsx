@@ -9,6 +9,7 @@ import {
   ChevronUp,
   CheckCircle2,
   Sliders,
+  Sparkles,
 } from "lucide-react";
 import { marketApi, predictionApi } from "../../services/api";
 import { SentimentResponse, Prediction } from "../../types";
@@ -215,6 +216,102 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
           </span>
         )}
       </div>
+
+      {/* Multi-Horizon Machine Learning Forecast (T+1, T+3, T+5) */}
+      {prediction?.ml_forecast && (
+        <div className="p-3 rounded-md bg-[#0B1120] border border-[#386BFF]/30 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#F1F5FC] flex items-center space-x-1.5">
+              <Sparkles size={14} className="text-[#386BFF]" />
+              <span>Multi-Horizon ML Forecast</span>
+            </span>
+
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#00C087]/15 text-[#00C087] border border-[#00C087]/30">
+              {prediction.ml_forecast.model_accuracy.directional_hit_rate_pct}% Hit Rate
+            </span>
+          </div>
+
+          {/* 3 Horizon Grid Cards */}
+          <div className="grid grid-cols-3 gap-2 text-xs font-mono-numbers">
+            {prediction.ml_forecast.horizons.map((h) => {
+              const isUp = h.expected_change_pct >= 0;
+              return (
+                <div
+                  key={h.horizon_days}
+                  onClick={() => {
+                    setOrderSide(h.direction === "BEARISH" ? "SELL" : "BUY");
+                    setOrderType("LIMIT");
+                    setOrderPrice(h.target_price);
+                    setTriggerPrice(h.lower_bound);
+                    setAppliedFeedback(true);
+                    setTimeout(() => setAppliedFeedback(false), 2500);
+                  }}
+                  className="p-2 rounded bg-[#111C30] border border-[#26354B] hover:border-[#386BFF] cursor-pointer transition-all flex flex-col justify-between group relative"
+                  title={`Click to apply ${h.label} target (₹${h.target_price.toFixed(2)}) & SL (₹${h.lower_bound.toFixed(2)}) to Order Entry`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-semibold text-[#94A3B8] font-sans group-hover:text-[#386BFF] transition-colors">
+                      {h.label.split(" ")[0]}
+                    </span>
+                    <span
+                      className={`text-[9px] font-bold px-1 rounded ${
+                        isUp ? "text-[#00C087] bg-[#00C087]/15" : "text-[#F04452] bg-[#F04452]/15"
+                      }`}
+                    >
+                      {h.direction}
+                    </span>
+                  </div>
+
+                  <div className="font-bold text-[#F1F5FC] text-[13px] group-hover:text-[#386BFF] transition-colors">
+                    ₹{h.target_price.toFixed(2)}
+                  </div>
+
+                  <div
+                    className={`text-[10px] font-semibold flex items-center space-x-0.5 mt-0.5 ${
+                      isUp ? "text-[#00C087]" : "text-[#F04452]"
+                    }`}
+                  >
+                    <span>{isUp ? "+" : ""}{h.expected_change_pct}%</span>
+                    <span className="text-[9px] text-[#94A3B8] font-normal">
+                      ({h.probability_up}%)
+                    </span>
+                  </div>
+
+                  <div className="text-[9px] text-[#94A3B8] mt-1 pt-1 border-t border-[#26354B]/50 truncate flex items-center justify-between">
+                    <span>90% CI</span>
+                    <span>₹{Math.round(h.lower_bound)} - ₹{Math.round(h.upper_bound)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Feature Importance Decomposition */}
+          <div className="pt-2 border-t border-[#26354B]/50 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-[#94A3B8] font-semibold uppercase tracking-wider">
+              <span>ML Feature Weighting</span>
+              <span>Importance</span>
+            </div>
+
+            <div className="space-y-1">
+              {prediction.ml_forecast.feature_importance.map((f, i) => (
+                <div key={i} className="space-y-0.5">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-[#F1F5FC] truncate max-w-[170px]">{f.factor}</span>
+                    <span className="font-mono text-[#386BFF] font-semibold">{f.weight_pct}%</span>
+                  </div>
+                  <div className="w-full h-1 bg-[#1A2940] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#386BFF] rounded-full transition-all"
+                      style={{ width: `${f.weight_pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Automated Trade Plan Card (Entry, Targets, Stop Loss, Risk/Reward) */}
       {prediction?.trade_plan && (

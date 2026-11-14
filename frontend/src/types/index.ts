@@ -107,6 +107,44 @@ export interface BollingerData {
   lower: number;
 }
 
+export interface HorizonForecast {
+  horizon_days: number;
+  label: string;
+  target_price: number;
+  expected_change_pct: number;
+  probability_up: number;
+  lower_bound: number;
+  upper_bound: number;
+  direction: "BULLISH" | "BEARISH" | "NEUTRAL";
+}
+
+export interface FeatureWeight {
+  factor: string;
+  weight_pct: number;
+  impact: "POSITIVE" | "NEGATIVE" | "NEUTRAL";
+}
+
+export interface ModelAccuracy {
+  directional_hit_rate_pct: number;
+  backtested_sessions: number;
+  mape_pct: number;
+}
+
+export interface ForecastPoint {
+  date: string;
+  target: number;
+  lower: number;
+  upper: number;
+  is_anchor?: boolean;
+}
+
+export interface MLForecastData {
+  horizons: HorizonForecast[];
+  feature_importance: FeatureWeight[];
+  model_accuracy: ModelAccuracy;
+  forecast_points: ForecastPoint[];
+}
+
 export interface Prediction {
   ticker: string;
   current_price: number;
@@ -123,6 +161,7 @@ export interface Prediction {
   bollinger?: BollingerData;
   trade_plan?: TradePlan;
   breakdown?: IndicatorSignal[];
+  ml_forecast?: MLForecastData;
 }
 
 export interface MarketDepthLevel {

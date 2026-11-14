@@ -6,6 +6,7 @@ import pandas as pd
 
 from app.core.cache import market_cache
 from app.services.market_data import market_service, TRACKED_UNIVERSE
+from app.services.ml_forecaster import ml_forecaster
 
 # Keywords for financial news NLP scoring
 BULLISH_KEYWORDS = {
@@ -317,6 +318,19 @@ def predict_stock(ticker: str) -> Dict[str, Any]:
     prev_close = float(close_series.iloc[-2]) if len(close_series) > 1 else latest
     day_change_pct = ((latest - prev_close) / prev_close * 100) if prev_close else 0.0
 
+    # 5. Multi-Horizon Machine Learning & AI Forecasting (T+1, T+3, T+5)
+    try:
+        ml_forecast = ml_forecaster.generate_forecast(
+            df=df,
+            current_price=latest,
+            news_sentiment_score=news_score,
+        )
+    except Exception as e:
+        ml_forecast = ml_forecaster._build_baseline_forecast(
+            current_price=latest,
+            news_sentiment_score=news_score,
+        )
+
     return {
         "ticker": clean_ticker,
         "current_price": round(latest, 2),
@@ -333,6 +347,7 @@ def predict_stock(ticker: str) -> Dict[str, Any]:
         "bollinger": bollinger,
         "trade_plan": trade_plan,
         "breakdown": breakdown,
+        "ml_forecast": ml_forecast,
     }
 
 

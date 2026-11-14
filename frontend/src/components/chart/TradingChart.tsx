@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   createChart,
   IChartApi,
@@ -9,14 +9,9 @@ import {
   AreaData,
   HistogramData,
 } from "lightweight-charts";
-import {
-  TrendingUp,
-  Activity,
-  BarChart2,
-  Info,
-} from "lucide-react";
+import { TrendingUp, Activity, BarChart2, Info, Sparkles } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
-import { ChartCandle } from "../../types";
+import { ChartCandle, MLForecastData } from "../../types";
 import { predictionApi } from "../../services/api";
 
 type ChartStyle = "candles" | "line" | "area";
@@ -26,40 +21,6 @@ interface TradingChartProps {
   ticker: string;
 }
 
-// Generate realistic Indian stock OHLCV history with indicator mockups
-function generateSimulatedCandles(basePrice: number, count = 120): ChartCandle[] {
-  const candles: ChartCandle[] = [];
-  let price = basePrice * 0.90;
-  const now = new Date();
-  now.setDate(now.getDate() - count);
-
-  for (let i = 0; i < count; i++) {
-    const date = new Date(now);
-    date.setDate(date.getDate() + i);
-    // Skip weekends
-    if (date.getDay() === 0 || date.getDay() === 6) continue;
-
-    const dateStr = date.toISOString().split("T")[0];
-    const isUp = Math.random() > 0.48;
-    const movement = (Math.random() * 0.022 + 0.002) * price;
-    const open = price;
-    const close = isUp ? open + movement : Math.max(10, open - movement);
-    const high = Math.max(open, close) + Math.random() * (price * 0.008);
-    const low = Math.min(open, close) - Math.random() * (price * 0.008);
-    const volume = Math.floor(600000 + Math.random() * 2600000);
-
-    candles.push({
-      time: dateStr,
-      open: parseFloat(open.toFixed(2)),
-      high: parseFloat(high.toFixed(2)),
-      low: parseFloat(low.toFixed(2)),
-      close: parseFloat(close.toFixed(2)),
-      volume,
-    });
-    price = close;
-  }
-  return candles;
-}
 
 export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -74,47 +35,56 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
   const [showSMA, setShowSMA] = useState(true);
   const [showEMA, setShowEMA] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
+  const [showForecastCone, setShowForecastCone] = useState(true);
   const [candlesData, setCandlesData] = useState<ChartCandle[]>([]);
+  const [mlForecast, setMlForecast] = useState<MLForecastData | null>(null);
 
   // Real-time market tick from WebSocket
-  const liveTick = useAppStore((state) => state.liveTicks[ticker.toUpperCase()]);
+  const liveTick = useAppStore(
+    (state) => state.liveTicks[ticker.toUpperCase()],
+  );
 
-  // Base price lookup based on ticker
-  const basePrice = useMemo(() => {
-    switch (ticker.toUpperCase()) {
-      case "RELIANCE": return 2984.50;
-      case "TCS": return 4120.75;
-      case "HDFCBANK": return 1742.30;
-      case "INFY": return 1865.10;
-      case "ICICIBANK": return 1268.90;
-      case "TATAMOTORS": return 988.40;
-      case "SBIN": return 818.40;
-      default: return 1500.00;
-    }
-  }, [ticker]);
 
-  // Fetch or generate candles
+  // Fetch candles from real yfinance API; no static fallback
   useEffect(() => {
     let isMounted = true;
+    const mappedPeriod =
+      timeframe === "1W"
+        ? "1y"
+        : timeframe === "1M"
+        ? "2y"
+        : timeframe === "1H" || timeframe === "30m"
+        ? "1mo"
+        : "6mo";
+
     predictionApi
-      .getHistory(ticker, "6mo")
+      .getHistory(ticker, mappedPeriod)
       .then((res) => {
         if (isMounted && res.candles && res.candles.length > 0) {
           setCandlesData(res.candles);
-        } else if (isMounted) {
-          setCandlesData(generateSimulatedCandles(basePrice));
         }
+        // If API returns empty, we wait for liveTick to be available before simulating
       })
       .catch(() => {
-        if (isMounted) {
-          setCandlesData(generateSimulatedCandles(basePrice));
-        }
+        // API error — keep existing candles or leave empty (liveTick will update the last bar)
       });
+
+    // Fetch Machine Learning Multi-Horizon Forecast
+    predictionApi
+      .analyzeStock(ticker)
+      .then((pred) => {
+        if (isMounted && pred.ml_forecast) {
+          setMlForecast(pred.ml_forecast);
+        }
+      })
+      .catch(() => {});
 
     return () => {
       isMounted = false;
     };
-  }, [ticker, basePrice]);
+    // Only re-run on ticker/timeframe change, NOT on every liveTick
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker, timeframe]);
 
   // Initialize and update Lightweight Chart
   useEffect(() => {
@@ -158,7 +128,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
         timeVisible: true,
       },
       handleScroll: { mouseWheel: true, pressedMouseMove: true },
-      handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
     });
 
     chartRef.current = chart;
@@ -224,7 +198,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
       const volData: HistogramData[] = candlesData.map((c) => ({
         time: c.time as any,
         value: c.volume || 1000000,
-        color: c.close >= c.open ? "rgba(0, 192, 135, 0.25)" : "rgba(240, 68, 82, 0.25)",
+        color:
+          c.close >= c.open
+            ? "rgba(0, 192, 135, 0.25)"
+            : "rgba(240, 68, 82, 0.25)",
       }));
       volumeSeries.setData(volData);
       volumeSeriesRef.current = volumeSeries;
@@ -273,6 +250,66 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
       emaSeries.setData(emaData);
     }
 
+    // Optional AI Multi-Horizon Projection Cone (T+5)
+    if (
+      showForecastCone &&
+      mlForecast?.forecast_points &&
+      mlForecast.forecast_points.length >= 2
+    ) {
+      const coneAreaSeries = chart.addAreaSeries({
+        topColor: "rgba(56, 107, 255, 0.16)",
+        bottomColor: "rgba(56, 107, 255, 0.02)",
+        lineColor: "rgba(56, 107, 255, 0.4)",
+        lineWidth: 1,
+        lineStyle: 1,
+        title: "90% Confidence Envelope",
+      });
+
+      const targetSeries = chart.addLineSeries({
+        color: "#386BFF",
+        lineWidth: 2,
+        lineStyle: 2, // Dashed
+        title: "AI Forecast Target (T+5)",
+      });
+      const upperSeries = chart.addLineSeries({
+        color: "#00C087",
+        lineWidth: 1,
+        lineStyle: 1, // Dotted
+        title: "90% Upper Bound",
+      });
+      const lowerSeries = chart.addLineSeries({
+        color: "#F04452",
+        lineWidth: 1,
+        lineStyle: 1, // Dotted
+        title: "90% Lower Bound",
+      });
+
+      coneAreaSeries.setData(
+        mlForecast.forecast_points.map((pt) => ({
+          time: pt.date as any,
+          value: pt.upper,
+        })),
+      );
+      targetSeries.setData(
+        mlForecast.forecast_points.map((pt) => ({
+          time: pt.date as any,
+          value: pt.target,
+        })),
+      );
+      upperSeries.setData(
+        mlForecast.forecast_points.map((pt) => ({
+          time: pt.date as any,
+          value: pt.upper,
+        })),
+      );
+      lowerSeries.setData(
+        mlForecast.forecast_points.map((pt) => ({
+          time: pt.date as any,
+          value: pt.lower,
+        })),
+      );
+    }
+
     chart.timeScale().fitContent();
 
     const handleResize = () => {
@@ -293,7 +330,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
         chartRef.current = null;
       }
     };
-  }, [candlesData, chartStyle, showSMA, showEMA, showVolume, theme]);
+  }, [
+    candlesData,
+    chartStyle,
+    showSMA,
+    showEMA,
+    showVolume,
+    showForecastCone,
+    mlForecast,
+    theme,
+  ]);
 
   // Dynamically update the active bar on the Lightweight Chart upon each incoming sub-second tick
   useEffect(() => {
@@ -326,9 +372,22 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
 
   const latestCandle = candlesData[candlesData.length - 1];
   const prevCandle = candlesData[candlesData.length - 2];
-  const currentPrice = liveTick ? liveTick.price : (latestCandle ? latestCandle.close : basePrice);
-  const dayChange = liveTick ? liveTick.change : (prevCandle ? currentPrice - prevCandle.close : 24.5);
-  const dayChangePct = liveTick ? liveTick.change_pct : (prevCandle ? (dayChange / prevCandle.close) * 100 : 0.85);
+  // Price priority: live WebSocket tick → last real candle close → 0 (loading state)
+  const currentPrice = liveTick
+    ? liveTick.price
+    : latestCandle
+      ? latestCandle.close
+      : 0;
+  const dayChange = liveTick
+    ? liveTick.change
+    : prevCandle && latestCandle
+      ? latestCandle.close - prevCandle.close
+      : 0;
+  const dayChangePct = liveTick
+    ? liveTick.change_pct
+    : prevCandle && prevCandle.close > 0
+      ? (dayChange / prevCandle.close) * 100
+      : 0;
   const isUp = dayChange >= 0;
 
   return (
@@ -349,9 +408,22 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
                 <span className="w-1.5 h-1.5 rounded-full bg-[#00C087] animate-pulse"></span>
                 <span>REALTIME</span>
               </span>
+              {showForecastCone && mlForecast?.horizons?.[2] && (
+                <span
+                  className="hidden md:flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#386BFF]/15 text-[#386BFF] font-mono border border-[#386BFF]/30"
+                  title="Machine Learning Expected 5-Day Projected Target"
+                >
+                  <Sparkles size={11} />
+                  <span>
+                    T+5: ₹{mlForecast.horizons[2].target_price.toFixed(2)}
+                  </span>
+                </span>
+              )}
             </div>
             <span className="text-[11px] text-[#94A3B8]">
-              {ticker === "RELIANCE" ? "Reliance Industries Ltd" : `${ticker} Equity`}
+              {ticker === "RELIANCE"
+                ? "Reliance Industries Ltd"
+                : `${ticker} Equity`}
             </span>
           </div>
 
@@ -365,12 +437,12 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
                   ? liveTick.direction === "up"
                     ? "flash-up text-[#00C087]"
                     : liveTick.direction === "down"
-                    ? "flash-down text-[#F04452]"
-                    : "text-[#F1F5FC]"
+                      ? "flash-down text-[#F04452]"
+                      : "text-[#F1F5FC]"
                   : "text-[#F1F5FC]"
               }`}
             >
-              ₹{currentPrice.toFixed(2)}
+              ₹{currentPrice > 0 ? currentPrice.toFixed(2) : "--"}
             </span>
             <span
               className={`text-xs font-semibold ${
@@ -386,7 +458,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
 
         {/* Timeframe Controls */}
         <div className="flex items-center space-x-1 bg-[#111C30] p-0.5 rounded-md border border-[#26354B]">
-          {(["1m", "5m", "15m", "30m", "1H", "1D", "1W", "1M"] as Timeframe[]).map((tf) => (
+          {(
+            ["1m", "5m", "15m", "30m", "1H", "1D", "1W", "1M"] as Timeframe[]
+          ).map((tf) => (
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
@@ -408,7 +482,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
             <button
               onClick={() => setChartStyle("candles")}
               className={`p-1 rounded text-xs ${
-                chartStyle === "candles" ? "bg-[#386BFF] text-white" : "text-[#94A3B8]"
+                chartStyle === "candles"
+                  ? "bg-[#386BFF] text-white"
+                  : "text-[#94A3B8]"
               }`}
               title="Candlestick Chart"
             >
@@ -417,7 +493,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
             <button
               onClick={() => setChartStyle("line")}
               className={`p-1 rounded text-xs ${
-                chartStyle === "line" ? "bg-[#386BFF] text-white" : "text-[#94A3B8]"
+                chartStyle === "line"
+                  ? "bg-[#386BFF] text-white"
+                  : "text-[#94A3B8]"
               }`}
               title="Line Chart"
             >
@@ -426,7 +504,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
             <button
               onClick={() => setChartStyle("area")}
               className={`p-1 rounded text-xs ${
-                chartStyle === "area" ? "bg-[#386BFF] text-white" : "text-[#94A3B8]"
+                chartStyle === "area"
+                  ? "bg-[#386BFF] text-white"
+                  : "text-[#94A3B8]"
               }`}
               title="Area Mountain Chart"
             >
@@ -470,6 +550,23 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
               >
                 VOL
               </button>
+              <button
+                onClick={() => setShowForecastCone(!showForecastCone)}
+                className={`flex items-center space-x-1 px-2 py-1 rounded text-[10px] font-medium border transition-colors ${
+                  showForecastCone
+                    ? "bg-[#386BFF]/20 text-[#386BFF] border-[#386BFF]/40 shadow-sm"
+                    : "bg-[#111C30] text-[#94A3B8] border-[#26354B]"
+                }`}
+                title="Toggle AI Multi-Horizon Projection Cone (T+5)"
+              >
+                <Sparkles
+                  size={11}
+                  className={
+                    showForecastCone ? "text-[#386BFF]" : "text-[#94A3B8]"
+                  }
+                />
+                <span>AI CONE</span>
+              </button>
             </div>
           )}
         </div>
@@ -481,7 +578,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
           <div className="flex items-center space-x-2">
             <Info size={14} className="text-[#386BFF] flex-shrink-0" />
             <span>
-              <strong>Beginner Guide:</strong> Green bars show price rising during that day; Red bars show price falling. The line at bottom shows trading volume.
+              <strong>Beginner Guide:</strong> Green bars show price rising
+              during that day; Red bars show price falling. The line at bottom
+              shows trading volume.
             </span>
           </div>
           <span className="text-[#386BFF] font-semibold hover:underline cursor-pointer">

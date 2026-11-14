@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 
@@ -34,6 +34,44 @@ class BollingerData(BaseModel):
     lower: float
 
 
+class HorizonForecast(BaseModel):
+    horizon_days: int  # 1, 3, 5
+    label: str  # "T+1 (Tomorrow)", "T+3 (Swing)", "T+5 (Weekly)"
+    target_price: float
+    expected_change_pct: float
+    probability_up: float  # 0 to 100
+    lower_bound: float
+    upper_bound: float
+    direction: str  # "BULLISH" | "BEARISH" | "NEUTRAL"
+
+
+class FeatureWeight(BaseModel):
+    factor: str
+    weight_pct: float
+    impact: str  # "POSITIVE" | "NEGATIVE" | "NEUTRAL"
+
+
+class ModelAccuracy(BaseModel):
+    directional_hit_rate_pct: float
+    backtested_sessions: int
+    mape_pct: float
+
+
+class ForecastPoint(BaseModel):
+    date: str
+    target: float
+    lower: float
+    upper: float
+    is_anchor: Optional[bool] = False
+
+
+class MLForecastData(BaseModel):
+    horizons: List[HorizonForecast]
+    feature_importance: List[FeatureWeight]
+    model_accuracy: ModelAccuracy
+    forecast_points: List[ForecastPoint]
+
+
 class PredictionResponse(BaseModel):
     ticker: str
     current_price: float
@@ -50,6 +88,7 @@ class PredictionResponse(BaseModel):
     bollinger: Optional[BollingerData] = None
     trade_plan: Optional[TradePlan] = None
     breakdown: Optional[List[IndicatorSignal]] = None
+    ml_forecast: Optional[MLForecastData] = None
 
 
 class ChartCandle(BaseModel):

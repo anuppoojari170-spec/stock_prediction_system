@@ -22,23 +22,28 @@ MARKET_INDICES = {
     "BANK NIFTY": "^NSEBANK",
 }
 
+# Last-resort fallback prices (used only if yfinance is unavailable).
+# Update periodically but these are never shown when network is healthy.
 FALLBACK_PRICES: Dict[str, float] = {
-    "RELIANCE": 2984.50,
-    "TCS": 4120.75,
-    "INFY": 1865.10,
-    "HDFCBANK": 1742.30,
-    "ICICIBANK": 1268.90,
-    "TATAMOTORS": 988.40,
-    "SBIN": 818.40,
-    "ITC": 476.85,
-    "WIPRO": 564.30,
-    "BAJFINANCE": 6920.00,
-    "KOTAKBANK": 1785.20,
-    "LT": 3640.00,
-    "AXISBANK": 1195.40,
-    "HINDUNILVR": 2480.00,
-    "MARUTI": 11450.00,
-    "ASIANPAINT": 2890.00,
+    "RELIANCE": 1330.00,
+    "TCS": 3700.00,
+    "INFY": 1550.00,
+    "HDFCBANK": 1750.00,
+    "ICICIBANK": 1270.00,
+    "TATAMOTORS": 790.00,
+    "SBIN": 820.00,
+    "ITC": 460.00,
+    "WIPRO": 560.00,
+    "BAJFINANCE": 6800.00,
+    "KOTAKBANK": 1850.00,
+    "LT": 3650.00,
+    "AXISBANK": 1180.00,
+    "HINDUNILVR": 2400.00,
+    "MARUTI": 11200.00,
+    "ASIANPAINT": 2300.00,
+    "HCLTECH": 1800.00,
+    "LTIM": 5700.00,
+    "BHARTIARTL": 1600.00,
 }
 
 FALLBACK_INDICES = [
@@ -207,18 +212,18 @@ class CachedYFinanceProvider(BaseMarketDataProvider):
             pass
 
         # If download failed or returned too few items, build from fallback prices
-        if len(movers) < 4:
-            movers = [
-                {"ticker": "RELIANCE", "price": 2984.50, "change_pct": 1.30},
-                {"ticker": "TATAMOTORS", "price": 988.40, "change_pct": 1.29},
-                {"ticker": "INFY", "price": 1865.10, "change_pct": 1.24},
-                {"ticker": "ICICIBANK", "price": 1268.90, "change_pct": 1.16},
-                {"ticker": "TCS", "price": 4120.75, "change_pct": 1.11},
-                {"ticker": "HDFCBANK", "price": 1742.30, "change_pct": -0.48},
-                {"ticker": "SBIN", "price": 818.40, "change_pct": -0.50},
-                {"ticker": "AXISBANK", "price": 1195.40, "change_pct": -0.65},
-                {"ticker": "WIPRO", "price": 564.30, "change_pct": -0.37},
-            ]
+        # if len(movers) < 4:
+        #     movers = [
+        #         {"ticker": "RELIANCE", "price": 2984.50, "change_pct": 1.30},
+        #         {"ticker": "TATAMOTORS", "price": 988.40, "change_pct": 1.29},
+        #         {"ticker": "INFY", "price": 1865.10, "change_pct": 1.24},
+        #         {"ticker": "ICICIBANK", "price": 1268.90, "change_pct": 1.16},
+        #         {"ticker": "TCS", "price": 4120.75, "change_pct": 1.11},
+        #         {"ticker": "HDFCBANK", "price": 1742.30, "change_pct": -0.48},
+        #         {"ticker": "SBIN", "price": 818.40, "change_pct": -0.50},
+        #         {"ticker": "AXISBANK", "price": 1195.40, "change_pct": -0.65},
+        #         {"ticker": "WIPRO", "price": 564.30, "change_pct": -0.37},
+        #     ]
 
         movers.sort(key=lambda m: m["change_pct"], reverse=True)
         gainers = [m for m in movers if m["change_pct"] >= 0][:limit]
