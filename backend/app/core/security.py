@@ -47,7 +47,12 @@ def _b64_decode(data: str) -> bytes:
     return base64.urlsafe_b64decode(data)
 
 
-def create_access_token(subject: Any, expires_delta_seconds: Optional[int] = None) -> str:
+def create_access_token(
+    subject: Any,
+    username: Optional[str] = None,
+    email: Optional[str] = None,
+    expires_delta_seconds: Optional[int] = None,
+) -> str:
     """Generate a signed HMAC-SHA256 JWT."""
     header = {"alg": settings.ALGORITHM, "typ": "JWT"}
 
@@ -56,6 +61,8 @@ def create_access_token(subject: Any, expires_delta_seconds: Optional[int] = Non
 
     payload = {
         "sub": str(subject),
+        "username": username or "",
+        "email": email or "",
         "iat": now,
         "exp": exp,
     }

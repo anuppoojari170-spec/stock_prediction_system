@@ -2,11 +2,54 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 from fastapi import HTTPException, status
 
-from app.services.market_data import market_service
+from app.core.config import settings
+from app.services.market_data import market_service, COMPANY_PROFILES
+from app.services.market_streamer import is_indian_market_open
+
+INDEX_TICKERS = {
+    "NIFTY", "NIFTY 50", "NIFTY50", "^NSEI", "NSE",
+    "BANK NIFTY", "BANKNIFTY", "NIFTYBANK", "^NSEBANK",
+    "SENSEX", "BSE SENSEX", "BSESN", "^BSESN",
+    "NIFTY IT", "NIFTYIT", "^CNXIT",
+    "FINNIFTY", "NIFTY MIDCAP", "NIFTY NEXT 50", "NIFTY 100", "NIFTY 500",
+    "INDIA VIX", "INDIAVIX", "^INDIAVIX",
+}
+
+
+def is_index_ticker(ticker: str) -> bool:
+    """Return True if the symbol is a benchmark market index rather than a tradeable equity or ETF."""
+    if not ticker:
+        return False
+    raw = ticker.strip().upper().replace(".NS", "").replace(".BO", "")
+    if raw.startswith("^"):
+        return True
+    # ETFs (e.g., NIFTYBEES, BANKBEES, GOLDBEES, ITBEES) are tradeable on the cash market
+    if "BEES" in raw or raw.endswith("ETF"):
+        return False
+    if raw in INDEX_TICKERS:
+        return True
+    normalized = raw.replace(" ", "").replace("-", "")
+    for idx in INDEX_TICKERS:
+        if normalized == idx.replace(" ", "").replace("-", "").replace("^", ""):
+            return True
+    return False
 
 
 def buy_stock(user_id: int, ticker: str, quantity: int, db: sqlite3.Connection) -> Dict[str, Any]:
     ticker = ticker.strip().upper().replace(".NS", "")
+
+    if is_index_ticker(ticker):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"'{ticker}' is a benchmark market index and cannot be traded directly. To take positions on index movements, please trade ETFs like NIFTYBEES or BANKBEES."
+        )
+
+    if not settings.ALLOW_AFTER_HOURS_TRADING and not is_indian_market_open():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Indian stock markets (NSE/BSE) are currently closed. Regular trading session is Monday to Friday, 09:15 AM to 03:30 PM IST. Orders cannot be placed after market hours."
+        )
+
     price = market_service.get_live_price(ticker)
 
     if price is None:
@@ -89,6 +132,19 @@ def buy_stock(user_id: int, ticker: str, quantity: int, db: sqlite3.Connection) 
 
 def sell_stock(user_id: int, ticker: str, quantity: int, db: sqlite3.Connection) -> Dict[str, Any]:
     ticker = ticker.strip().upper().replace(".NS", "")
+
+    if is_index_ticker(ticker):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"'{ticker}' is a benchmark market index and cannot be traded directly."
+        )
+
+    if not settings.ALLOW_AFTER_HOURS_TRADING and not is_indian_market_open():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Indian stock markets (NSE/BSE) are currently closed. Regular trading session is Monday to Friday, 09:15 AM to 03:30 PM IST. Orders cannot be placed after market hours."
+        )
+
     price = market_service.get_live_price(ticker)
 
     if price is None:
@@ -194,8 +250,14 @@ def get_portfolio_holdings(user_id: int, db: sqlite3.Connection) -> List[Dict[st
         pnl = round(current_value - invested, 2)
         pnl_pct = round((pnl / invested) * 100, 2) if invested > 0 else 0.0
 
+        profile = COMPANY_PROFILES.get(ticker.upper())
+        company_name = profile["companyName"] if profile else f"{ticker} Limited"
+        sector = profile["sector"] if profile else "Indian Equities"
+
         enriched.append({
             "ticker": ticker,
+            "companyName": company_name,
+            "sector": sector,
             "shares": shares,
             "avg_price": round(avg_price, 2),
             "current_price": live_price,

@@ -8,14 +8,14 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
 
 
 class Settings:
-    PROJECT_NAME: str = "Trade AI Pilot"
+    PROJECT_NAME: str = "TradePilot AI"
     VERSION: str = "2.0.0"
     API_V1_STR: str = "/api/v1"
 
     # Security & JWT
     SECRET_KEY: str = os.getenv("SECRET_KEY", "tradepilot-ai-super-secret-key-change-in-production-2026")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 24-hour absolute session ceiling with 30-min idle inactivity timeout
 
     # Initial paper balance for new users (₹10,00,000)
     STARTING_BALANCE: float = 1000000.0
@@ -28,6 +28,12 @@ class Settings:
 
     # Market Data
     MARKET_DATA_PROVIDER: str = os.getenv("MARKET_DATA_PROVIDER", "yfinance")
+    ALLOW_AFTER_HOURS_TRADING: bool = os.getenv("ALLOW_AFTER_HOURS_TRADING", "false").lower() in ("true", "1", "yes")
+
+    # Test User Credentials for API Testing
+    TEST_USER_LOGIN: str = os.getenv("TEST_USER_LOGIN", "testuser")
+    TEST_USER_PASSWORD: str = os.getenv("TEST_USER_PASSWORD", "TestPassword123!")
+    TEST_USER_EMAIL: str = os.getenv("TEST_USER_EMAIL", "testuser@tradepilot.ai")
 
     # AI & Google Gemini Integration
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")

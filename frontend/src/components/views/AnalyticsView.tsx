@@ -19,13 +19,13 @@ import {
   StrategyType,
 } from "../../types";
 import { ModelBenchmarkTab } from "../analytics/ModelBenchmarkTab";
-
-const POPULAR_TICKERS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN"];
+import { StockSearchInput } from "../common/StockSearchInput";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 const STRATEGIES: { id: StrategyType; label: string; desc: string }[] = [
   {
     id: "AI_ENSEMBLE",
-    label: "Trade AI Pilot Ensemble",
+    label: "TradePilot AI Ensemble",
     desc: "Multi-factor consensus combining RSI, MACD, Bollinger Bands & ATR Dynamic Stops",
   },
   {
@@ -163,9 +163,6 @@ export const AnalyticsView: React.FC = () => {
         >
           <Award size={15} className={activeAnalyticsTab === "benchmark" ? "text-[#386BFF]" : "text-[#94A3B8]"} />
           <span>ML Model Benchmark & Leaderboard</span>
-          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#386BFF]/20 text-[#386BFF] border border-[#386BFF]/30">
-            FINAL YEAR ML
-          </span>
         </button>
 
         <button
@@ -221,40 +218,17 @@ export const AnalyticsView: React.FC = () => {
       {/* Interactive Strategy Configurator Panel */}
       <div className="nexus-card p-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Ticker Selector */}
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-              Stock Universe (NSE)
-            </label>
-            <div className="flex items-center space-x-1.5">
-              <input
-                type="text"
-                value={ticker}
-                onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                placeholder="RELIANCE"
-                className="w-full px-3 py-1.5 bg-[#0B1120] border border-[#26354B] rounded text-xs text-[#F1F5FC] font-bold focus:outline-none focus:border-[#386BFF]"
-              />
-            </div>
-            {/* Quick Chips */}
-            <div className="flex items-center space-x-1 mt-2 overflow-x-auto no-scrollbar">
-              {POPULAR_TICKERS.map((sym) => (
-                <button
-                  key={sym}
-                  onClick={() => {
-                    setTicker(sym);
-                    runBacktest(sym);
-                  }}
-                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                    ticker === sym
-                      ? "bg-[#386BFF] text-white"
-                      : "bg-[#1A2940] text-[#94A3B8] hover:text-[#F1F5FC]"
-                  }`}
-                >
-                  {sym}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Dynamic NSE Stock Search */}
+          <StockSearchInput
+            value={ticker}
+            onChange={(sym) => setTicker(sym)}
+            onSelect={(sym) => {
+              setTicker(sym);
+              runBacktest(sym);
+            }}
+            label="Stock Universe (NSE)"
+            placeholder="Search 2,600+ NSE stocks..."
+          />
 
           {/* Algorithmic Strategy Selector */}
           <div className="md:col-span-2">
@@ -395,7 +369,20 @@ export const AnalyticsView: React.FC = () => {
       )}
 
       {/* Equity Curve Tear Sheet (Interactive SVG) */}
-      <div className="nexus-card p-4">
+      <div className="nexus-card p-4 relative overflow-hidden">
+        {loading && (
+          <div className="absolute inset-0 bg-[#0B1120]/85 backdrop-blur-sm z-20 flex flex-col items-center justify-center space-y-3 transition-opacity duration-300">
+            <CirclingLoader size="lg" color="text-[#386BFF]" />
+            <div className="text-center px-4">
+              <span className="text-xs font-semibold text-[#F1F5FC] font-mono block">
+                Simulating Algorithmic Backtest on {ticker}
+              </span>
+              <span className="text-[11px] text-[#94A3B8] font-mono mt-1 block">
+                Computing equity curve, Sharpe ratio, slippage & drawdown...
+              </span>
+            </div>
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-3 border-b border-[#26354B]">
           <div>
             <h3 className="font-heading font-bold text-sm text-[#F1F5FC] flex items-center space-x-2">

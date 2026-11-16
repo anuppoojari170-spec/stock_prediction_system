@@ -44,6 +44,7 @@ class NewsItem(BaseModel):
     sentiment: str
     summary: str
     relatedTickers: List[str]
+    url: Optional[str] = None
 
 
 class StockDetailsOut(BaseModel):

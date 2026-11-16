@@ -25,11 +25,13 @@ export const FloatingAiCopilot: React.FC = () => {
   const [messages, setMessages] = useState<AIChatMessage[]>([
     {
       role: "assistant",
-      content: `👋 Hello! I am **TradePilot AI Copilot**. I am analyzing **${activeTicker}** with live technical indicators and risk models.\n\nAsk me about any Indian stock, trade rationale, stop-loss placement, or position sizing!`,
+      content: `👋 Hello! I am **TradePilot AI Copilot**. I am analyzing **${activeTicker}** with live technical indicators and risk models.\n\nAsk me about any Indian stock, sector trends (e.g. banking, finance, IT), trade rationale, or stop-loss placement!`,
     },
   ]);
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [thinkingTopic, setThinkingTopic] = useState<string>("");
+  const [currentTopicBadge, setCurrentTopicBadge] = useState<string>(activeTicker);
   const [dynamicActions, setDynamicActions] = useState<string[]>([
     `Why is ${activeTicker} a buy/sell?`,
     `What is the stop-loss risk?`,
@@ -49,8 +51,9 @@ export const FloatingAiCopilot: React.FC = () => {
     }
   }, [messages, isAiCopilotOpen]);
 
-  // Update initial message when activeTicker changes
+  // Update topic badge & message when activeTicker changes
   useEffect(() => {
+    setCurrentTopicBadge(activeTicker);
     setMessages((prev) => [
       ...prev,
       {
@@ -60,9 +63,71 @@ export const FloatingAiCopilot: React.FC = () => {
     ]);
   }, [activeTicker]);
 
+  // Intelligent sector & stock topic detector for responsive thinking status
+  const detectTopic = (query: string): { thinking: string; badge: string } => {
+    const q = query.toLowerCase();
+    if (q.includes("finance") || q.includes("bank") || q.includes("nbfc") || q.includes("lender") || q.includes("fintech") || q.includes("credit")) {
+      return {
+        thinking: "Analyzing Indian Banking & Finance Sector momentum & macro trends...",
+        badge: "FINANCE & BANKING",
+      };
+    }
+    if (q.includes("it") || q.includes("tech") || q.includes("software") || q.includes("cloud") || q.includes("ai stock")) {
+      return {
+        thinking: "Analyzing NIFTY IT sector valuation & earnings trends...",
+        badge: "IT & TECH",
+      };
+    }
+    if (q.includes("auto") || q.includes("car") || q.includes("ev") || q.includes("motor") || q.includes("vehicle")) {
+      return {
+        thinking: "Analyzing Indian Automotive & EV sector trends...",
+        badge: "AUTOMOTIVE",
+      };
+    }
+    if (q.includes("pharma") || q.includes("healthcare") || q.includes("drug") || q.includes("hospital")) {
+      return {
+        thinking: "Analyzing Healthcare & Pharma sector catalysts...",
+        badge: "PHARMA",
+      };
+    }
+    if (q.includes("energy") || q.includes("power") || q.includes("solar") || q.includes("green") || q.includes("oil") || q.includes("gas")) {
+      return {
+        thinking: "Analyzing Energy & Power sector utilities & green transition...",
+        badge: "ENERGY & POWER",
+      };
+    }
+    if (q.includes("fmcg") || q.includes("consumer") || q.includes("retail")) {
+      return {
+        thinking: "Analyzing Indian FMCG & consumption trends...",
+        badge: "FMCG",
+      };
+    }
+    if (q.includes("metal") || q.includes("steel") || q.includes("mining")) {
+      return {
+        thinking: "Analyzing Metal & Commodity cycles...",
+        badge: "METALS",
+      };
+    }
+    if (q.includes(activeTicker.toLowerCase())) {
+      return {
+        thinking: `Analyzing ${activeTicker} technicals, trade plan & live news...`,
+        badge: activeTicker,
+      };
+    }
+    const cleanSnippet = query.trim().slice(0, 24);
+    return {
+      thinking: `Analyzing quantitative setups for "${cleanSnippet}${query.length > 24 ? "..." : ""}"...`,
+      badge: activeTicker,
+    };
+  };
+
   const handleSend = async (textToSend?: string) => {
     const text = (textToSend || inputMessage).trim();
     if (!text || loading) return;
+
+    const { thinking, badge } = detectTopic(text);
+    setThinkingTopic(thinking);
+    setCurrentTopicBadge(badge);
 
     const userMsg: AIChatMessage = { role: "user", content: text };
     const updatedMessages = [...messages, userMsg];
@@ -86,6 +151,10 @@ export const FloatingAiCopilot: React.FC = () => {
         },
       ]);
 
+      if (res.ticker) {
+        setCurrentTopicBadge(res.ticker);
+      }
+
       if (res.suggested_actions && res.suggested_actions.length > 0) {
         setDynamicActions(res.suggested_actions);
       }
@@ -106,6 +175,7 @@ export const FloatingAiCopilot: React.FC = () => {
     if (actionText.startsWith("Switch Terminal to ")) {
       const sym = actionText.replace("Switch Terminal to ", "").trim().toUpperCase();
       setActiveTicker(sym);
+      setCurrentTopicBadge(sym);
       setMessages((prev) => [
         ...prev,
         {
@@ -118,38 +188,127 @@ export const FloatingAiCopilot: React.FC = () => {
     }
   };
 
-  const renderMessageContent = (content: string) => {
-    // If content contains [Switch Terminal to TICKER], render as clickable button
-    if (!content.includes("[Switch Terminal to ")) {
-      return content;
-    }
-    const regex = /\[Switch Terminal to ([A-Za-z0-9_]+)\]/g;
-    const parts: (string | React.ReactNode)[] = [];
+  // Inline Markdown Token Parser: **bold**, *italic*, `code`, and [Switch Terminal to SYM]
+  const renderInlineMarkdown = (text: string): React.ReactNode => {
+    if (!text) return null;
+    const tokenRegex = /(\[Switch Terminal to ([A-Za-z0-9_]+)\]|\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+    const elements: (string | React.ReactNode)[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
-    while ((match = regex.exec(content)) !== null) {
+    while ((match = tokenRegex.exec(text)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(content.substring(lastIndex, match.index));
+        elements.push(text.substring(lastIndex, match.index));
       }
-      const sym = match[1].toUpperCase();
-      parts.push(
-        <button
-          key={match.index}
-          onClick={() => handleActionClick(`Switch Terminal to ${sym}`)}
-          className="inline-flex items-center space-x-1 px-2.5 py-1 my-1 rounded bg-[#386BFF]/20 hover:bg-[#386BFF]/30 text-[#386BFF] hover:text-white border border-[#386BFF]/40 text-[11px] font-bold font-mono transition-all cursor-pointer shadow-sm"
-          title={`Click to load ${sym} into chart & order pad`}
-        >
-          <span>🔄 Switch Terminal to {sym}</span>
-        </button>
-      );
-      lastIndex = match.index + match[0].length;
+
+      const fullMatch = match[0];
+      const switchSym = match[2];
+      const boldText = match[3];
+      const italicText = match[4];
+      const codeText = match[5];
+
+      if (switchSym) {
+        const sym = switchSym.toUpperCase();
+        elements.push(
+          <button
+            key={`sw-${match.index}`}
+            type="button"
+            onClick={() => handleActionClick(`Switch Terminal to ${sym}`)}
+            className="inline-flex items-center space-x-1 px-2.5 py-0.5 my-0.5 mx-1 rounded bg-[#386BFF]/20 hover:bg-[#386BFF]/40 text-[#386BFF] hover:text-white border border-[#386BFF]/40 text-[11px] font-bold font-mono transition-all cursor-pointer shadow-sm"
+            title={`Click to load ${sym} into chart & order pad`}
+          >
+            <span>🔄 Switch Terminal to {sym}</span>
+          </button>
+        );
+      } else if (boldText !== undefined) {
+        elements.push(
+          <strong key={`b-${match.index}`} className="font-bold text-[#F1F5FC] text-white">
+            {boldText}
+          </strong>
+        );
+      } else if (italicText !== undefined) {
+        elements.push(
+          <em key={`i-${match.index}`} className="italic text-[#E2E8F0]">
+            {italicText}
+          </em>
+        );
+      } else if (codeText !== undefined) {
+        elements.push(
+          <code
+            key={`c-${match.index}`}
+            className="px-1.5 py-0.5 mx-0.5 rounded bg-[#0B1120] text-[#A78BFA] font-mono text-[11px] border border-[#26354B]"
+          >
+            {codeText}
+          </code>
+        );
+      } else {
+        elements.push(fullMatch);
+      }
+
+      lastIndex = match.index + fullMatch.length;
     }
 
-    if (lastIndex < content.length) {
-      parts.push(content.substring(lastIndex));
+    if (lastIndex < text.length) {
+      elements.push(text.substring(lastIndex));
     }
-    return parts;
+
+    return elements.length === 1 && typeof elements[0] === "string" ? elements[0] : elements;
+  };
+
+  // Structured Message Content Parser: handles headers, bullet points, numbered lists, and paragraphs
+  const renderMessageContent = (content: string) => {
+    if (!content) return null;
+
+    const lines = content.split("\n");
+
+    return (
+      <div className="space-y-1">
+        {lines.map((rawLine, idx) => {
+          const line = rawLine.trim();
+
+          // Empty line spacer
+          if (!line) {
+            return <div key={idx} className="h-1.5" />;
+          }
+
+          // Headers (### Header or ## Header)
+          if (line.startsWith("### ") || line.startsWith("## ") || line.startsWith("# ")) {
+            const headerText = line.replace(/^#+\s*/, "");
+            return (
+              <h5 key={idx} className="font-heading font-bold text-xs text-[#F1F5FC] mt-2 mb-1 text-white">
+                {renderInlineMarkdown(headerText)}
+              </h5>
+            );
+          }
+
+          // Bullet items: handles "* **Title:** description", "- **Title:**", "• item", "1. item"
+          const bulletMatch = line.match(/^([*•-]|\d+\.)\s+(.*)$/);
+          if (bulletMatch) {
+            const isNumbered = /^\d+\./.test(bulletMatch[1]);
+            const bulletSymbol = isNumbered ? bulletMatch[1] : "•";
+            const restOfText = bulletMatch[2];
+
+            return (
+              <div key={idx} className="flex items-start space-x-2 my-1 pl-0.5">
+                <span className={`flex-shrink-0 ${isNumbered ? "font-mono font-bold text-[10px] text-[#A78BFA] mt-0.5" : "text-[#386BFF] text-base leading-none mt-0.5"}`}>
+                  {bulletSymbol}
+                </span>
+                <div className="flex-1 leading-relaxed text-[#CBD5E1]">
+                  {renderInlineMarkdown(restOfText)}
+                </div>
+              </div>
+            );
+          }
+
+          // Regular paragraph line
+          return (
+            <p key={idx} className="leading-relaxed text-[#CBD5E1] my-0.5">
+              {renderInlineMarkdown(line)}
+            </p>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -196,7 +355,7 @@ export const FloatingAiCopilot: React.FC = () => {
                     TradePilot AI Copilot
                   </h4>
                   <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#386BFF]/20 text-[#386BFF] border border-[#386BFF]/30">
-                    {activeTicker}
+                    {currentTopicBadge}
                   </span>
                 </div>
                 <span className="text-[10px] text-[#94A3B8]">
@@ -231,9 +390,9 @@ export const FloatingAiCopilot: React.FC = () => {
                 className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[85%] p-3 rounded-xl leading-relaxed whitespace-pre-wrap ${
+                  className={`max-w-[85%] p-3 rounded-xl leading-relaxed ${
                     m.role === "user"
-                      ? "bg-[#386BFF] text-white rounded-br-none shadow-md"
+                      ? "bg-[#386BFF] text-white rounded-br-none shadow-md whitespace-pre-wrap"
                       : "bg-[#162238] text-[#F1F5FC] border border-[#26354B] rounded-bl-none shadow-sm"
                   }`}
                 >
@@ -244,9 +403,11 @@ export const FloatingAiCopilot: React.FC = () => {
 
             {loading && (
               <div className="flex justify-start">
-                <div className="p-3 rounded-xl bg-[#162238] border border-[#26354B] text-[#94A3B8] flex items-center space-x-2">
-                  <Sparkles size={14} className="animate-spin text-[#7657F6]" />
-                  <span className="text-[11px]">Analyzing {activeTicker} technicals & news...</span>
+                <div className="p-3 rounded-xl bg-[#162238] border border-[#386BFF]/40 text-[#CBD5E1] flex items-center space-x-2.5 shadow-md">
+                  <Sparkles size={15} className="animate-spin text-[#7657F6] flex-shrink-0" />
+                  <span className="text-[11px] font-medium text-[#CBD5E1] animate-pulse">
+                    {thinkingTopic || `Analyzing ${currentTopicBadge} technicals & news...`}
+                  </span>
                 </div>
               </div>
             )}

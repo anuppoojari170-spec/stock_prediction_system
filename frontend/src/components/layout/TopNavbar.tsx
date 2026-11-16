@@ -19,6 +19,8 @@ const popularStocks = [
   { ticker: "INFY", name: "Infosys Limited", price: 1141.50, changePct: -0.84 },
   { ticker: "HDFCBANK", name: "HDFC Bank Limited", price: 804.00, changePct: -1.02 },
   { ticker: "ICICIBANK", name: "ICICI Bank Limited", price: 1583.60, changePct: -0.40 },
+  { ticker: "BSE", name: "BSE Limited (Exchange)", price: 2680.00, changePct: 1.25 },
+  { ticker: "NIFTYBEES", name: "Nippon India Nifty 50 ETF", price: 284.50, changePct: -0.61 },
   { ticker: "BHARTIARTL", name: "Bharti Airtel Limited", price: 2106.00, changePct: 0.48 },
   { ticker: "SBIN", name: "State Bank of India", price: 1080.00, changePct: -0.60 },
   { ticker: "LT", name: "Larsen & Toubro Ltd", price: 4143.80, changePct: -0.37 },
@@ -146,7 +148,7 @@ export const TopNavbar: React.FC = () => {
       <div className="flex items-center space-x-4">
         <div className="hidden xl:flex flex-col">
           <span className="text-[11px] font-semibold tracking-wider uppercase text-[#386BFF]">
-            TRADE AI PILOT
+            TradePilot AI
           </span>
           <span className="text-xs text-[#94A3B8]">Trade Smarter. AI-Powered Precision.</span>
         </div>

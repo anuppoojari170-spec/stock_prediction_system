@@ -67,7 +67,7 @@ export const AuthModal: React.FC = () => {
             TP
           </div>
           <h2 className="text-xl font-bold font-heading text-[#F1F5FC]">
-            {authModalMode === "login" ? "Sign In to Trade AI Pilot" : "Create Trade AI Pilot Account"}
+            {authModalMode === "login" ? "Sign In to TradePilot AI" : "Create TradePilot AI Account"}
           </h2>
           <p className="text-xs text-[#94A3B8] mt-1">
             {authModalMode === "login"
@@ -155,7 +155,7 @@ export const AuthModal: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 rounded-md bg-[#386BFF] py-2.5 text-xs font-semibold text-white hover:bg-[#4C7DFF] focus:outline-none disabled:opacity-50 transition shadow-lg shadow-[#386BFF]/25 flex items-center justify-center space-x-2"
+            className="w-full mt-2 rounded-md bg-[#386BFF] py-2.5 text-xs font-semibold text-white hover:bg-[#4C7DFF] focus:outline-none disabled:opacity-50 transition shadow-lg shadow-[#386BFF]/25 flex items-center justify-center space-x-2 cursor-pointer"
           >
             {loading ? (
               <>
@@ -169,6 +169,24 @@ export const AuthModal: React.FC = () => {
             )}
           </button>
         </form>
+
+        {/* Quick Test User Autofill in Login Mode */}
+        {authModalMode === "login" && (
+          <div className="mt-3.5 pt-3 border-t border-[#26354B] flex items-center justify-between text-[11px]">
+            <span className="text-[#94A3B8]">Test Account:</span>
+            <button
+              type="button"
+              onClick={() => {
+                setUsername("testuser");
+                setEmail("testuser@tradepilot.ai");
+                setPassword("TestPassword123!");
+              }}
+              className="text-[#386BFF] hover:underline font-mono text-[11px] cursor-pointer"
+            >
+              Fill testuser / TestPassword123!
+            </button>
+          </div>
+        )}
 
         {/* Toggle Mode */}
         <div className="mt-5 text-center text-xs text-[#94A3B8]">

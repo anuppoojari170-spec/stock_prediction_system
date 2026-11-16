@@ -325,7 +325,7 @@ class StrategyBacktester:
                 monthly_returns.append(MonthlyReturn(month=m_label, return_pct=m_ret))
 
         strategy_labels = {
-            StrategyType.AI_ENSEMBLE: "Trade AI Pilot Multi-Factor Ensemble",
+            StrategyType.AI_ENSEMBLE: "TradePilot AI Multi-Factor Ensemble",
             StrategyType.RSI_MEAN_REVERSION: "RSI Mean Reversion (14, 30/70)",
             StrategyType.MACD_CROSSOVER: "MACD Momentum Trend (12/26/9)",
             StrategyType.BOLLINGER_BANDS: "Bollinger Bands Mean Reversion (20, 2.0)",

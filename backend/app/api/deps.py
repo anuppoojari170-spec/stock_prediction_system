@@ -32,6 +32,8 @@ async def get_current_user(
         )
 
     user_id = int(payload["sub"])
+    username = payload.get("username")
+    email = payload.get("email")
     cur = db.cursor()
 
     cur.execute(
@@ -44,6 +46,19 @@ async def get_current_user(
         (user_id,)
     )
     user = cur.fetchone()
+
+    # Fallback lookup by username or email if user ID differs across SQLite and Supabase
+    if not user and (username or email):
+        cur.execute(
+            """
+            SELECT u.id, u.email, u.username, u.full_name, u.created_at, a.balance
+            FROM users u
+            LEFT JOIN accounts a ON a.user_id = u.id
+            WHERE LOWER(u.username) = LOWER(?) OR LOWER(u.email) = LOWER(?)
+            """,
+            (username or "", email or "")
+        )
+        user = cur.fetchone()
 
     if not user:
         raise HTTPException(

@@ -69,6 +69,59 @@ class AIAssistantService:
 
         return None
 
+    def classify_sentiment_with_llm(self, text: str) -> Optional[Dict[str, Any]]:
+        """Zero-shot financial sentiment classification via Google Gemini API."""
+        if not self.api_key:
+            return None
+
+        clean_text = text.strip()
+        if not clean_text:
+            return None
+
+        cache_key = f"gemini_sentiment:{hash(clean_text)}"
+        cached = market_cache.get(cache_key)
+        if cached:
+            return cached
+
+        prompt = (
+            f"Classify the financial sentiment of this Indian stock market headline:\n"
+            f"'{clean_text}'\n\n"
+            "Respond in raw valid JSON with exactly two keys: "
+            "'sentiment' (one of: BULLISH, BEARISH, NEUTRAL) and 'score' (float between -1.0 and 1.0). "
+            "Do not output markdown code blocks."
+        )
+        system_instruction = (
+            "You are an expert Indian stock market quantitative NLP analyst. "
+            "Analyze financial sentiment accurately with sensitivity to turnaround cues, macroeconomic factors, and regulatory actions."
+        )
+
+        llm_text = self._call_gemini_api(prompt, system_instruction)
+        if llm_text:
+            try:
+                clean_json = llm_text.strip()
+                if clean_json.startswith("```json"):
+                    clean_json = clean_json[7:]
+                if clean_json.startswith("```"):
+                    clean_json = clean_json[3:]
+                if clean_json.endswith("```"):
+                    clean_json = clean_json[:-3]
+                parsed = json.loads(clean_json.strip())
+                sentiment = str(parsed.get("sentiment", "NEUTRAL")).upper()
+                if sentiment not in {"BULLISH", "BEARISH", "NEUTRAL"}:
+                    sentiment = "NEUTRAL"
+                score = float(parsed.get("score", 0.0))
+                score = max(-1.0, min(1.0, score))
+                result = {
+                    "sentiment": sentiment,
+                    "score": round(score, 2),
+                    "model": "Google Gemini AI",
+                }
+                market_cache.set(cache_key, result, ttl=3600)
+                return result
+            except Exception:
+                pass
+        return None
+
     def generate_commentary(self, pred: Dict[str, Any], mode: str = "pro") -> AICommentaryResponse:
         """
         Synthesize comprehensive AI trade thesis, key driving catalysts,
@@ -274,12 +327,91 @@ class AIAssistantService:
         mentioned_pred = None
         live_web_news: List[str] = []
 
+        # Indian Sector & Thematic Intelligence Mapping
+        SECTOR_MAP = {
+            "FINANCE & BANKING": {
+                "keywords": ["finance", "financial", "banking", "bank", "nbfc", "lender", "lending", "fintech"],
+                "benchmark": "BANK NIFTY",
+                "top_tickers": ["HDFCBANK", "ICICIBANK", "SBIN", "BAJFINANCE", "KOTAKBANK"],
+                "news_query": "Indian banking finance stock market Nifty Bank RBI",
+            },
+            "IT & SOFTWARE": {
+                "keywords": ["it", "tech", "technology", "software", "ai stock", "cloud"],
+                "benchmark": "NIFTY IT",
+                "top_tickers": ["TCS", "INFY", "HCLTECH", "WIPRO", "LTIM"],
+                "news_query": "Nifty IT Indian tech software stocks earnings",
+            },
+            "AUTOMOTIVE & EV": {
+                "keywords": ["auto", "automotive", "automobile", "ev", "car", "motor"],
+                "benchmark": "NIFTY AUTO",
+                "top_tickers": ["TATAMOTORS", "MARUTI", "M&M", "BAJAJ-AUTO"],
+                "news_query": "Nifty Auto Indian automobile EV sales Tata Motors Maruti",
+            },
+            "ENERGY & POWER": {
+                "keywords": ["energy", "power", "solar", "renewable", "oil", "gas", "green energy"],
+                "benchmark": "NIFTY ENERGY",
+                "top_tickers": ["RELIANCE", "TATAPOWER", "NTPC", "ONGC", "ADANIGREEN"],
+                "news_query": "Nifty Energy Indian power solar oil green stocks",
+            },
+            "PHARMA & HEALTHCARE": {
+                "keywords": ["pharma", "pharmaceutical", "healthcare", "drug", "hospital"],
+                "benchmark": "NIFTY PHARMA",
+                "top_tickers": ["SUNPHARMA", "CIPLA", "DRREDDY", "DIVISLAB"],
+                "news_query": "Nifty Pharma Indian healthcare USFDA formulation stocks",
+            },
+            "FMCG & CONSUMER": {
+                "keywords": ["fmcg", "consumer", "consumption", "retail", "staples"],
+                "benchmark": "NIFTY FMCG",
+                "top_tickers": ["HINDUNILVR", "ITC", "NESTLEIND", "BRITANNIA"],
+                "news_query": "Nifty FMCG Indian consumer rural demand ITC HUL",
+            },
+            "METALS & MINING": {
+                "keywords": ["metal", "steel", "mining", "iron", "copper", "aluminium"],
+                "benchmark": "NIFTY METAL",
+                "top_tickers": ["TATASTEEL", "JSWSTEEL", "HINDALCO", "VEDL"],
+                "news_query": "Nifty Metal Indian steel commodity prices",
+            },
+        }
+
+        detected_sector = None
+        sector_ctx = ""
+        q_lower = user_message.lower()
+
+        if not extracted_ticker:
+            for s_name, s_info in SECTOR_MAP.items():
+                if any(kw in q_lower for kw in s_info["keywords"]):
+                    detected_sector = s_name
+                    # Fetch sectoral live news
+                    try:
+                        from app.services.predictor import fetch_live_headlines
+                        sec_news = fetch_live_headlines(s_info["news_query"])
+                        if sec_news:
+                            live_web_news = sec_news
+                    except Exception:
+                        pass
+
+                    # Fetch live prices of top constituent leaders
+                    from app.services.market_data import market_service
+                    lead_lines = []
+                    for lead_sym in s_info["top_tickers"][:4]:
+                        p = market_service.get_live_price(lead_sym)
+                        if p:
+                            lead_lines.append(f"• {lead_sym}: Rs {p:.2f}")
+
+                    sector_ctx = (
+                        f"--- SECTOR INTELLIGENCE: {s_name} (Benchmark: {s_info['benchmark']}) ---\n"
+                        f"Sector Leaders:\n" + "\n".join(lead_lines) + "\n"
+                        f"------------------------------------------------------------------------\n"
+                    )
+                    break
+
         target_lookup_sym = extracted_ticker if (extracted_ticker and extracted_ticker != ticker) else ticker
-        try:
-            from app.services.predictor import fetch_live_headlines
-            live_web_news = fetch_live_headlines(target_lookup_sym)
-        except Exception:
-            live_web_news = []
+        if not live_web_news:
+            try:
+                from app.services.predictor import fetch_live_headlines
+                live_web_news = fetch_live_headlines(target_lookup_sym)
+            except Exception:
+                live_web_news = []
 
         if extracted_ticker and extracted_ticker != ticker:
             try:
@@ -293,7 +425,9 @@ class AIAssistantService:
         # If Gemini is configured, use it for conversational answers
         if self.api_key:
             pred_ctx = ""
-            if active_pred:
+            if sector_ctx:
+                pred_ctx += sector_ctx
+            elif active_pred:
                 macd_data = active_pred.get("macd", {})
                 bb_data = active_pred.get("bollinger", {})
                 risk_data = active_pred.get("risk", {})
@@ -361,7 +495,16 @@ class AIAssistantService:
             chat_prompt = f"{pred_ctx}{history_str}Trader's Question: {user_message}\nProvide an insightful, specific answer based on the real-time stock data and latest web news."
             llm_reply = self._call_gemini_api(chat_prompt, system_instruction)
             if llm_reply:
-                if mentioned_pred and extracted_ticker:
+                if detected_sector:
+                    reply_ticker = detected_sector
+                    lead1 = SECTOR_MAP[detected_sector]["top_tickers"][0]
+                    lead2 = SECTOR_MAP[detected_sector]["top_tickers"][1]
+                    actions = [
+                        f"Switch Terminal to {lead1}",
+                        f"Check {lead2} Setup",
+                        f"Top {detected_sector.split()[0]} Picks",
+                    ]
+                elif mentioned_pred and extracted_ticker:
                     actions = [
                         f"Switch Terminal to {extracted_ticker}",
                         f"Check {extracted_ticker} Stop-Loss",
@@ -388,6 +531,28 @@ class AIAssistantService:
                 )
 
         # Deterministic Intelligent Trader Assistant Fallback
+        if detected_sector:
+            s_data = SECTOR_MAP[detected_sector]
+            top_stocks_str = ", ".join(s_data["top_tickers"][:4])
+            lead1 = s_data["top_tickers"][0]
+            lead2 = s_data["top_tickers"][1]
+            reply = (
+                f"**Institutional Perspective on Indian {detected_sector} Sector:**\n\n"
+                f"• **Sector Setup:** The {detected_sector} sector is currently navigating key macro cues with structural support near major benchmark levels ({s_data['benchmark']}).\n"
+                f"• **Top Sector Leaders:** Institutional volume flow is concentrated in **{top_stocks_str}**.\n"
+                f"• **Tactical Execution:** Favor staggered accumulation on key support zones rather than aggressive chasing; use strict stop-losses on individual equity positions."
+            )
+            return AIChatResponse(
+                reply=reply,
+                suggested_actions=[
+                    f"Switch Terminal to {lead1}",
+                    f"Check {lead2} Setup",
+                    f"Top {detected_sector.split()[0]} Picks",
+                ],
+                ticker=detected_sector,
+                provider="TradePilot Sector Quantitative Engine",
+            )
+
         target_pred_for_fallback = mentioned_pred if mentioned_pred else active_pred
         fallback_sym = extracted_ticker if extracted_ticker else ticker
         return self._generate_intelligent_fallback_chat(user_message, fallback_sym, target_pred_for_fallback, mode)

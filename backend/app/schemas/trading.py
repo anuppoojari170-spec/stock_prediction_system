@@ -18,6 +18,8 @@ class OrderResponse(BaseModel):
 
 class HoldingOut(BaseModel):
     ticker: str
+    companyName: Optional[str] = None
+    sector: Optional[str] = None
     shares: int
     avg_price: float
     current_price: float

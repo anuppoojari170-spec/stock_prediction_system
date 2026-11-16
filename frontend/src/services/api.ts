@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useAuthStore } from "../store/useAuthStore";
 import {
   AICommentaryResponse,
   AIChatRequest,
@@ -62,6 +63,17 @@ api.interceptors.response.use(
   (error) => {
     activeRequests = Math.max(0, activeRequests - 1);
     activityListeners.forEach((fn) => fn(activeRequests));
+    if (error?.response?.status === 401) {
+      const url = error.config?.url || "";
+      // Only trigger session expiration logout if the core auth validation (/auth/me or /auth/refresh) fails
+      // Never terminate active session on background data polling glitches
+      if (url.includes("/auth/me") || url.includes("/auth/refresh")) {
+        const hadToken = Boolean(localStorage.getItem("tradepilot_token"));
+        if (hadToken) {
+          useAuthStore.getState().logout("Your session has expired. Please sign in again to continue trading.");
+        }
+      }
+    }
     return Promise.reject(error);
   }
 );
@@ -74,6 +86,10 @@ export const authApi = {
   },
   login: async (data: { login: string; password: string }) => {
     const res = await api.post<{ access_token: string }>("/auth/login", data);
+    return res.data;
+  },
+  refresh: async () => {
+    const res = await api.post<{ access_token: string }>("/auth/refresh");
     return res.data;
   },
   getMe: async () => {

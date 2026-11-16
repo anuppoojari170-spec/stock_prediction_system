@@ -11,20 +11,23 @@ import {
   Sliders,
   Sparkles,
   Bot,
-  MessageSquareText,
 } from "lucide-react";
 import { marketApi, predictionApi } from "../../services/api";
 import { SentimentResponse, Prediction } from "../../types";
-import { useAppStore } from "../../store/useAppStore";
+import { useAppStore, isIndexTicker, isIndianMarketOpen } from "../../store/useAppStore";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 interface SentimentGaugeProps {
   ticker?: string;
 }
 
 export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIANCE" }) => {
-  const { setOrderSide, setOrderType, setOrderPrice, setTriggerPrice, mode, toggleAiCopilot, openOrderModal } = useAppStore();
-  const [showDetails, setShowDetails] = useState<boolean>(true);
+  const { setOrderSide, setOrderType, setOrderPrice, setTriggerPrice, mode, openOrderModal } = useAppStore();
+  const [showDetails, setShowDetails] = useState<boolean>(false);
   const [appliedFeedback, setAppliedFeedback] = useState<boolean>(false);
+
+  const isIndex = isIndexTicker(ticker);
+  const isMarketOpen = isIndianMarketOpen();
 
   // 1. Fetch Global Market Sentiment
   const {
@@ -53,6 +56,7 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
   };
 
   const handleApplyTradePlan = () => {
+    if (isIndex || !isMarketOpen) return;
     if (!prediction?.trade_plan) return;
     const plan = prediction.trade_plan;
     const side = prediction.signal === "SELL" ? "SELL" : "BUY";
@@ -119,6 +123,12 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
         </div>
 
         <div className="flex items-center space-x-2">
+          {isPredFetching && (
+            <span className="hidden sm:flex items-center space-x-1.5 text-[10px] text-[#386BFF] font-mono">
+              <CirclingLoader size="xs" color="text-[#386BFF]" />
+              <span>Analyzing...</span>
+            </span>
+          )}
           <button
             onClick={handleRefresh}
             className="p-1.5 rounded-md text-[#94A3B8] hover:text-[#386BFF] hover:bg-[#1A2940] transition-all"
@@ -238,50 +248,60 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
             </span>
           </div>
 
-          <div className="text-[11px] font-semibold text-[#F1F5FC] leading-snug">
+          <div className="text-xs font-semibold text-[#F1F5FC] leading-snug">
             {prediction.commentary.headline}
           </div>
 
-          <p className="text-[10px] text-[#94A3B8] leading-relaxed">
+          <p className="text-[11px] text-[#CBD5E1] leading-relaxed">
             {prediction.commentary.thesis}
           </p>
 
           {/* Beginner Mode Takeaway */}
           {mode === "beginner" && prediction.commentary.beginner_takeaway && (
-            <div className="p-2 rounded bg-[#7657F6]/10 border border-[#7657F6]/20 text-[10px] text-[#F1F5FC] space-y-1">
+            <div className="p-2.5 rounded bg-[#7657F6]/10 border border-[#7657F6]/20 text-[10px] text-[#F1F5FC] space-y-1">
               <span className="font-semibold text-[#7657F6] block">Beginner Takeaway:</span>
-              <span className="text-[#CBD5E1]">{prediction.commentary.beginner_takeaway}</span>
+              <span className="text-[#CBD5E1] leading-relaxed">{prediction.commentary.beginner_takeaway}</span>
             </div>
           )}
 
-          {/* Key Catalysts & Risks */}
-          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[#26354B]/50 text-[9px]">
+          {/* Key Drivers & Key Risks (Stacked Vertically with Full Text Visible) */}
+          <div className="space-y-3 pt-2.5 border-t border-[#26354B]/60">
+            {/* Key Drivers Section */}
             <div>
-              <span className="text-[#00C087] font-semibold block mb-0.5">Key Drivers</span>
-              <ul className="text-[#94A3B8] space-y-0.5 list-disc list-inside">
-                {(prediction.commentary.catalysts || []).slice(0, 2).map((c, i) => (
-                  <li key={i} className="truncate" title={c}>{c}</li>
+              <div className="flex items-center space-x-1.5 mb-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00C087]" />
+                <span className="text-[#00C087] font-semibold text-[11px] uppercase tracking-wider">
+                  Key Drivers
+                </span>
+              </div>
+              <ul className="space-y-1.5 pl-1">
+                {(prediction.commentary.catalysts || []).map((c, i) => (
+                  <li key={i} className="flex items-start space-x-2 text-[11px] text-[#CBD5E1] leading-relaxed">
+                    <span className="text-[#00C087] mt-0.5 flex-shrink-0 text-sm leading-none">•</span>
+                    <span className="flex-1 break-words">{c}</span>
+                  </li>
                 ))}
               </ul>
             </div>
+
+            {/* Key Risks Section */}
             <div>
-              <span className="text-[#F04452] font-semibold block mb-0.5">Key Risks</span>
-              <ul className="text-[#94A3B8] space-y-0.5 list-disc list-inside">
-                {(prediction.commentary.risks || []).slice(0, 2).map((r, i) => (
-                  <li key={i} className="truncate" title={r}>{r}</li>
+              <div className="flex items-center space-x-1.5 mb-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F04452]" />
+                <span className="text-[#F04452] font-semibold text-[11px] uppercase tracking-wider">
+                  Key Risks
+                </span>
+              </div>
+              <ul className="space-y-1.5 pl-1">
+                {(prediction.commentary.risks || []).map((r, i) => (
+                  <li key={i} className="flex items-start space-x-2 text-[11px] text-[#CBD5E1] leading-relaxed">
+                    <span className="text-[#F04452] mt-0.5 flex-shrink-0 text-sm leading-none">•</span>
+                    <span className="flex-1 break-words">{r}</span>
+                  </li>
                 ))}
               </ul>
             </div>
           </div>
-
-          {/* Ask Copilot Button */}
-          <button
-            onClick={toggleAiCopilot}
-            className="w-full mt-1 py-1 rounded bg-[#7657F6]/15 hover:bg-[#7657F6]/25 text-[#7657F6] hover:text-[#A78BFA] text-[10px] font-semibold border border-[#7657F6]/30 transition-all flex items-center justify-center space-x-1"
-          >
-            <MessageSquareText size={12} />
-            <span>Chat with AI Copilot About {ticker}</span>
-          </button>
         </div>
       )}
 
@@ -450,22 +470,40 @@ export const SentimentGauge: React.FC<SentimentGaugeProps> = ({ ticker = "RELIAN
           </div>
 
           {/* 1-Click Order Form Injection */}
-          <button
-            onClick={handleApplyTradePlan}
-            className="w-full mt-2 py-1.5 rounded bg-[#386BFF]/20 hover:bg-[#386BFF] text-[#386BFF] hover:text-white text-xs font-semibold border border-[#386BFF]/40 transition-all flex items-center justify-center space-x-1.5"
-          >
-            {appliedFeedback ? (
-              <>
-                <CheckCircle2 size={13} />
-                <span>Trade Plan Applied to Order Panel!</span>
-              </>
-            ) : (
-              <>
-                <Sliders size={13} />
-                <span>Apply Levels to Order Entry</span>
-              </>
-            )}
-          </button>
+          {isIndex ? (
+            <div
+              className="w-full mt-2 py-1.5 rounded bg-[#111C30] text-[#94A3B8] text-xs font-mono font-medium border border-[#26354B] flex items-center justify-center space-x-1.5 cursor-not-allowed"
+              title="Benchmark indices cannot be traded directly. Trade ETFs like NIFTYBEES instead."
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#E2B714]"></span>
+              <span>Index Benchmark (Non-Tradeable Instrument)</span>
+            </div>
+          ) : !isMarketOpen ? (
+            <button
+              disabled
+              className="w-full mt-2 py-1.5 rounded bg-[#26354B]/50 text-[#F5B942] text-xs font-medium border border-[#F5B942]/20 opacity-70 cursor-not-allowed flex items-center justify-center space-x-1.5"
+              title="Indian equity markets are closed. Regular hours: 09:15 - 15:30 IST."
+            >
+              <span>Market Closed (Opens 09:15 IST)</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleApplyTradePlan}
+              className="w-full mt-2 py-1.5 rounded bg-[#386BFF]/20 hover:bg-[#386BFF] text-[#386BFF] hover:text-white text-xs font-semibold border border-[#386BFF]/40 transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+            >
+              {appliedFeedback ? (
+                <>
+                  <CheckCircle2 size={13} />
+                  <span>Trade Plan Applied to Order Panel!</span>
+                </>
+              ) : (
+                <>
+                  <Sliders size={13} />
+                  <span>Apply Levels to Order Entry</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
 

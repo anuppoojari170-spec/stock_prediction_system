@@ -4,21 +4,58 @@ import {
   Search,
   PieChart,
 } from "lucide-react";
-import { useAppStore } from "../../store/useAppStore";
+import { useAppStore, isIndianMarketOpen } from "../../store/useAppStore";
 import { tradingApi } from "../../services/api";
 import { Holding } from "../../types";
 import { CirclingLoader } from "../common/CirclingLoader";
 
-const defaultSectorBreakdown = [
-  { name: "Information Technology", pct: 32.5, color: "#386BFF" },
-  { name: "Banking & Financials", pct: 29.8, color: "#7657F6" },
-  { name: "Energy & Conglomerate", pct: 20.6, color: "#00C087" },
-  { name: "Automotive", pct: 10.5, color: "#F5B942" },
-  { name: "FMCG", pct: 6.6, color: "#38BDF8" },
-];
+const SECTOR_COLORS: Record<string, string> = {
+  "Information Technology": "#386BFF",
+  "Banking & Financials": "#7657F6",
+  "Energy & Conglomerate": "#00C087",
+  "Automotive": "#F5B942",
+  "FMCG": "#38BDF8",
+  "Healthcare & Pharma": "#EC4899",
+  "Telecommunications": "#8B5CF6",
+  "Metals & Mining": "#F97316",
+  "Infrastructure & Engineering": "#6366F1",
+  "Index Benchmark ETF": "#10B981",
+  "Exchange & Market Venue": "#06B6D4",
+  "Consumer Goods & Paints": "#A855F7",
+  "Other / Diversified": "#64748B",
+};
+
+const KNOWN_STOCK_SECTORS: Record<string, string> = {
+  RELIANCE: "Energy & Conglomerate",
+  TCS: "Information Technology",
+  INFY: "Information Technology",
+  WIPRO: "Information Technology",
+  HCLTECH: "Information Technology",
+  LTIM: "Information Technology",
+  HDFCBANK: "Banking & Financials",
+  ICICIBANK: "Banking & Financials",
+  SBIN: "Banking & Financials",
+  KOTAKBANK: "Banking & Financials",
+  AXISBANK: "Banking & Financials",
+  BAJFINANCE: "Banking & Financials",
+  BHARTIARTL: "Telecommunications",
+  TATAMOTORS: "Automotive",
+  MARUTI: "Automotive",
+  ITC: "FMCG",
+  HINDUNILVR: "FMCG",
+  LT: "Infrastructure & Engineering",
+  ASIANPAINT: "Consumer Goods & Paints",
+  BSE: "Exchange & Market Venue",
+  "NIFTY 50": "Index Benchmark ETF",
+  NIFTY: "Index Benchmark ETF",
+  NIFTYBEES: "Index Benchmark ETF",
+  BANKBEES: "Banking & Financials",
+  GOLDBEES: "Other / Diversified",
+};
 
 export const PortfolioView: React.FC = () => {
   const { openOrderModal, liveTicks } = useAppStore();
+  const isMarketOpen = isIndianMarketOpen();
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"pnl" | "value" | "ticker">("value");
 
@@ -58,8 +95,60 @@ export const PortfolioView: React.FC = () => {
   const totalPnl = totalValue - totalInvested;
   const growthPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
   const todaysPnl = enrichedHoldings.reduce((acc, h) => acc + (h.day_pnl || 0), 0);
+  const todaysPnlPct = totalInvested > 0 ? (todaysPnl / totalInvested) * 100 : 0.0;
 
-  const sectorBreakdown = defaultSectorBreakdown;
+  // Dynamically compute real-time Sector & Asset Allocation from active portfolio holdings
+  const sectorBreakdown = useMemo(() => {
+    if (enrichedHoldings.length === 0 || totalValue <= 0) {
+      return [];
+    }
+
+    const sectorValues: Record<string, number> = {};
+
+    enrichedHoldings.forEach((h) => {
+      const sym = h.ticker.toUpperCase();
+      const rawSector = h.sector || KNOWN_STOCK_SECTORS[sym] || "Other / Diversified";
+
+      let normalized = rawSector;
+      const lower = rawSector.toLowerCase();
+      if (lower.includes("tech") || lower.includes("software") || lower.includes("it")) {
+        normalized = "Information Technology";
+      } else if (lower.includes("bank") || lower.includes("finance")) {
+        normalized = "Banking & Financials";
+      } else if (lower.includes("auto")) {
+        normalized = "Automotive";
+      } else if (lower.includes("oil") || lower.includes("energy") || lower.includes("conglomerate")) {
+        normalized = "Energy & Conglomerate";
+      } else if (lower.includes("fmcg") || lower.includes("consumer") || lower.includes("food")) {
+        normalized = "FMCG";
+      } else if (lower.includes("etf") || lower.includes("index")) {
+        normalized = "Index Benchmark ETF";
+      } else if (lower.includes("telecom")) {
+        normalized = "Telecommunications";
+      } else if (lower.includes("pharma") || lower.includes("health")) {
+        normalized = "Healthcare & Pharma";
+      } else if (lower.includes("infra") || lower.includes("engineer")) {
+        normalized = "Infrastructure & Engineering";
+      } else if (lower.includes("metal") || lower.includes("steel")) {
+        normalized = "Metals & Mining";
+      }
+
+      sectorValues[normalized] = (sectorValues[normalized] || 0) + (h.current_value || 0);
+    });
+
+    const items = Object.entries(sectorValues).map(([name, val], idx) => {
+      const pct = Math.round((val / totalValue) * 1000) / 10;
+      const palette = [
+        "#386BFF", "#7657F6", "#00C087", "#F5B942", "#38BDF8",
+        "#EC4899", "#8B5CF6", "#F97316", "#6366F1", "#10B981"
+      ];
+      const color = SECTOR_COLORS[name] || palette[idx % palette.length];
+      return { name, value: val, pct, color };
+    });
+
+    items.sort((a, b) => b.pct - a.pct);
+    return items;
+  }, [enrichedHoldings, totalValue]);
 
 
   const filteredHoldings = enrichedHoldings
@@ -95,25 +184,41 @@ export const PortfolioView: React.FC = () => {
           <div className="text-xl md:text-2xl font-bold font-mono-numbers text-[#F1F5FC] mt-1">
             ₹{totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
           </div>
-          <span className="text-[11px] text-[#00C087] mt-1 block font-mono-numbers">
-            +₹{todaysPnl.toLocaleString("en-IN")} Today (+1.32%)
+          <span
+            className={`text-[11px] mt-1 block font-mono-numbers ${
+              todaysPnl >= 0 ? "text-[#00C087]" : "text-[#F04452]"
+            }`}
+          >
+            {todaysPnl >= 0 ? "+" : ""}₹{todaysPnl.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Today ({todaysPnlPct >= 0 ? "+" : ""}{todaysPnlPct.toFixed(2)}%)
           </span>
         </div>
 
         <div className="nexus-card p-4">
           <span className="text-xs text-[#94A3B8]">Overall Profit / Loss</span>
-          <div className="text-xl md:text-2xl font-bold font-mono-numbers text-[#00C087] mt-1">
-            +₹{totalPnl.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          <div
+            className={`text-xl md:text-2xl font-bold font-mono-numbers mt-1 ${
+              totalPnl >= 0 ? "text-[#00C087]" : "text-[#F04452]"
+            }`}
+          >
+            {totalPnl >= 0 ? "+" : ""}₹{totalPnl.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
           </div>
-          <span className="text-[11px] text-[#00C087] mt-1 block font-mono-numbers">
-            +{growthPct.toFixed(2)}% Net Growth
+          <span
+            className={`text-[11px] mt-1 block font-mono-numbers ${
+              growthPct >= 0 ? "text-[#00C087]" : "text-[#F04452]"
+            }`}
+          >
+            {growthPct >= 0 ? "+" : ""}{growthPct.toFixed(2)}% Net Growth
           </span>
         </div>
 
         <div className="nexus-card p-4">
           <span className="text-xs text-[#94A3B8]">Today's P&L</span>
-          <div className="text-xl md:text-2xl font-bold font-mono-numbers text-[#00C087] mt-1">
-            +₹{todaysPnl.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          <div
+            className={`text-xl md:text-2xl font-bold font-mono-numbers mt-1 ${
+              todaysPnl >= 0 ? "text-[#00C087]" : "text-[#F04452]"
+            }`}
+          >
+            {todaysPnl >= 0 ? "+" : ""}₹{todaysPnl.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
           </div>
           <span className="text-[11px] text-[#94A3B8] mt-1 block">Live Unbooked Gain</span>
         </div>
@@ -126,31 +231,51 @@ export const PortfolioView: React.FC = () => {
             <PieChart size={16} className="text-[#386BFF]" />
             <span>Sector & Asset Allocation</span>
           </h3>
-          <span className="text-xs text-[#94A3B8] font-mono">100% Equity Diversification</span>
+          <span className="text-xs text-[#94A3B8] font-mono">
+            {sectorBreakdown.length > 0
+              ? `${sectorBreakdown.length} Active ${sectorBreakdown.length === 1 ? "Sector" : "Sectors"} • 100% Equity Exposure`
+              : "0 Holdings • Cash Margin Available"}
+          </span>
         </div>
 
-        {/* Visual Multi-Color Bar */}
-        <div className="w-full h-3 rounded-full bg-[#1A2940] flex overflow-hidden mb-3">
-          {sectorBreakdown.map((s, idx) => (
-            <div
-              key={idx}
-              className="h-full transition-all duration-500"
-              style={{ width: `${s.pct}%`, backgroundColor: s.color }}
-              title={`${s.name}: ${s.pct}%`}
-            />
-          ))}
-        </div>
-
-        {/* Legend */}
-        <div className="flex flex-wrap items-center gap-4 text-xs font-mono-numbers">
-          {sectorBreakdown.map((s, idx) => (
-            <div key={idx} className="flex items-center space-x-1.5">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }}></span>
-              <span className="text-[#94A3B8]">{s.name}:</span>
-              <span className="font-semibold text-[#F1F5FC]">{s.pct}%</span>
+        {sectorBreakdown.length > 0 ? (
+          <>
+            {/* Visual Multi-Color Bar */}
+            <div className="w-full h-3 rounded-full bg-[#1A2940] flex overflow-hidden mb-3">
+              {sectorBreakdown.map((s, idx) => (
+                <div
+                  key={idx}
+                  className="h-full transition-all duration-500"
+                  style={{ width: `${s.pct}%`, backgroundColor: s.color }}
+                  title={`${s.name}: ₹${s.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })} (${s.pct}%)`}
+                />
+              ))}
             </div>
-          ))}
-        </div>
+
+            {/* Legend */}
+            <div className="flex flex-wrap items-center gap-4 text-xs font-mono-numbers">
+              {sectorBreakdown.map((s, idx) => (
+                <div key={idx} className="flex items-center space-x-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }}></span>
+                  <span className="text-[#94A3B8]">{s.name}:</span>
+                  <span className="font-semibold text-[#F1F5FC]">{s.pct}%</span>
+                  <span className="text-[10px] text-[#64748B]">
+                    (₹{s.value.toLocaleString("en-IN", { maximumFractionDigits: 0 })})
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="py-4 px-3 rounded-lg bg-[#0B1120] border border-[#26354B]/50 flex flex-col items-center justify-center space-y-1.5 text-center">
+            <div className="w-full h-2 rounded-full bg-[#162238] overflow-hidden">
+              <div className="w-0 h-full bg-[#386BFF]"></div>
+            </div>
+            <span className="text-xs text-[#94A3B8] pt-2">
+              No sector exposure yet. Buy equity shares or index ETFs to dynamically track your asset allocation.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Holdings Table with Filter & Search */}
@@ -261,15 +386,25 @@ export const PortfolioView: React.FC = () => {
                       <div className="flex items-center justify-center space-x-1.5 font-sans">
                         <button
                           onClick={() => openOrderModal(h.ticker, "BUY")}
-                          className="px-2 py-1 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-white text-[10px] font-semibold transition-colors"
-                          title="Buy more shares"
+                          disabled={!isMarketOpen}
+                          className={`px-2 py-1 rounded text-white text-[10px] font-semibold transition-colors ${
+                            isMarketOpen
+                              ? "bg-[#386BFF] hover:bg-[#4C7DFF] cursor-pointer"
+                              : "bg-[#386BFF]/40 cursor-not-allowed opacity-60"
+                          }`}
+                          title={isMarketOpen ? "Buy more shares" : "Market closed (After Hours)"}
                         >
                           Add
                         </button>
                         <button
                           onClick={() => openOrderModal(h.ticker, "SELL")}
-                          className="px-2 py-1 rounded bg-[#F04452] hover:bg-[#ff5a68] text-white text-[10px] font-semibold transition-colors"
-                          title="Sell/Exit position"
+                          disabled={!isMarketOpen}
+                          className={`px-2 py-1 rounded text-white text-[10px] font-semibold transition-colors ${
+                            isMarketOpen
+                              ? "bg-[#F04452] hover:bg-[#ff5a68] cursor-pointer"
+                              : "bg-[#F04452]/40 cursor-not-allowed opacity-60"
+                          }`}
+                          title={isMarketOpen ? "Sell/Exit position" : "Market closed (After Hours)"}
                         >
                           Exit
                         </button>

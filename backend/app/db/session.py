@@ -189,6 +189,8 @@ def init_db() -> None:
         conn.commit()
         conn.close()
         print(f"[Database] Supabase PostgreSQL tables verified successfully.")
+        seed_default_users()
+        sync_user_databases()
         return
 
     # SQLite Schema Initialization
@@ -288,8 +290,155 @@ def init_db() -> None:
     conn.commit()
     conn.close()
 
+    # Seed pre-configured test users and demo accounts
+    seed_default_users()
+
     # Synchronize user accounts across SQLite & Supabase to guarantee cross-session persistence
     sync_user_databases()
+
+
+def seed_default_users() -> None:
+    """Ensure default test user and demo user exist with virtual funds and test portfolio holdings."""
+    from app.core.security import hash_password
+
+    test_users = [
+        {
+            "email": settings.TEST_USER_EMAIL,
+            "username": settings.TEST_USER_LOGIN,
+            "full_name": "API Test User",
+            "password": settings.TEST_USER_PASSWORD,
+            "balance": 1000000.0,
+            "holdings": [
+                ("RELIANCE", 10, 1339.70, 13397.00),
+                ("INFY", 25, 1141.50, 28537.50),
+                ("TCS", 5, 2407.50, 12037.50),
+            ],
+            "watchlists": [
+                ("Watchlist 1", "RELIANCE"),
+                ("Watchlist 1", "TCS"),
+                ("Watchlist 1", "INFY"),
+                ("Watchlist 1", "HDFCBANK"),
+                ("Watchlist 1", "TATAMOTORS"),
+                ("Watchlist 1", "NIFTYBEES"),
+                ("Tech Giants", "TCS"),
+                ("Tech Giants", "INFY"),
+                ("Tech Giants", "WIPRO"),
+                ("Tech Giants", "HCLTECH"),
+                ("Tech Giants", "LTIM"),
+            ],
+        },
+        {
+            "email": "demo@tradepilot.ai",
+            "username": "demo",
+            "full_name": "Demo Trader",
+            "password": "demo123",
+            "balance": 1000000.0,
+            "holdings": [
+                ("RELIANCE", 15, 1339.70, 20095.50),
+                ("HDFCBANK", 30, 804.00, 24120.00),
+            ],
+            "watchlists": [
+                ("Watchlist 1", "RELIANCE"),
+                ("Watchlist 1", "HDFCBANK"),
+                ("Watchlist 1", "ICICIBANK"),
+                ("Watchlist 1", "SBIN"),
+            ],
+        },
+    ]
+
+    # 1. Seed into SQLite
+    try:
+        conn = sqlite3.connect(settings.DB_PATH, timeout=10.0)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        for u in test_users:
+            cur.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)", (u["username"], u["email"]))
+            row = cur.fetchone()
+            pw_hash = hash_password(u["password"])
+            if not row:
+                cur.execute(
+                    "INSERT INTO users (email, username, full_name, password_hash) VALUES (?, ?, ?, ?)",
+                    (u["email"].lower(), u["username"].lower(), u["full_name"], pw_hash)
+                )
+                user_id = cur.lastrowid
+            else:
+                user_id = row["id"]
+                # Update password hash to match current config
+                cur.execute("UPDATE users SET password_hash = ? WHERE id = ?", (pw_hash, user_id))
+
+            # Ensure account balance exists
+            cur.execute("INSERT OR IGNORE INTO accounts (user_id, balance, currency) VALUES (?, ?, 'INR')", (user_id, u["balance"]))
+
+            # Ensure user watchlist categories exist
+            cur.execute("INSERT OR IGNORE INTO user_watchlists (user_id, name) VALUES (?, 'Watchlist 1')", (user_id,))
+            cur.execute("INSERT OR IGNORE INTO user_watchlists (user_id, name) VALUES (?, 'Tech Giants')", (user_id,))
+
+            # Ensure sample holdings exist
+            for t, s, avg, inv in u["holdings"]:
+                cur.execute(
+                    "INSERT OR IGNORE INTO portfolios (user_id, ticker, shares, avg_price, invested_amount) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, t, s, avg, inv)
+                )
+
+            # Ensure watchlist tickers exist
+            for cat, t in u["watchlists"]:
+                cur.execute(
+                    "INSERT OR IGNORE INTO watchlists (user_id, name, ticker, pinned) VALUES (?, ?, ?, 0)",
+                    (user_id, cat, t)
+                )
+
+            # Ensure welcome activity
+            cur.execute(
+                "INSERT OR IGNORE INTO activities (user_id, message, category) VALUES (?, ?, 'info')",
+                (user_id, f"Account ready with ₹{u['balance']:,.2f} virtual paper margin.")
+            )
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Database] Warning: SQLite test user seeding: {e}")
+
+    # 2. If Postgres is reachable, seed into Postgres too
+    try:
+        if settings.DATABASE_URL and "postgresql://" in settings.DATABASE_URL:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            conn_pg = psycopg2.connect(settings.DATABASE_URL, connect_timeout=5)
+            cur_pg = conn_pg.cursor(cursor_factory=RealDictCursor)
+
+            for u in test_users:
+                cur_pg.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(%s) OR LOWER(email) = LOWER(%s)", (u["username"], u["email"]))
+                row = cur_pg.fetchone()
+                pw_hash = hash_password(u["password"])
+                if not row:
+                    cur_pg.execute(
+                        "INSERT INTO users (email, username, full_name, password_hash) VALUES (%s, %s, %s, %s) RETURNING id",
+                        (u["email"].lower(), u["username"].lower(), u["full_name"], pw_hash)
+                    )
+                    user_id = cur_pg.fetchone()["id"]
+                else:
+                    user_id = row["id"]
+                    cur_pg.execute("UPDATE users SET password_hash = %s WHERE id = %s", (pw_hash, user_id))
+
+                cur_pg.execute("INSERT INTO accounts (user_id, balance, currency) VALUES (%s, %s, 'INR') ON CONFLICT (user_id) DO NOTHING", (user_id, u["balance"]))
+                cur_pg.execute("INSERT INTO user_watchlists (user_id, name) VALUES (%s, 'Watchlist 1') ON CONFLICT (user_id, name) DO NOTHING", (user_id,))
+                cur_pg.execute("INSERT INTO user_watchlists (user_id, name) VALUES (%s, 'Tech Giants') ON CONFLICT (user_id, name) DO NOTHING", (user_id,))
+                for t, s, avg, inv in u["holdings"]:
+                    cur_pg.execute(
+                        "INSERT INTO portfolios (user_id, ticker, shares, avg_price, invested_amount) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (user_id, ticker) DO NOTHING",
+                        (user_id, t, s, avg, inv)
+                    )
+                for cat, t in u["watchlists"]:
+                    cur_pg.execute(
+                        "INSERT INTO watchlists (user_id, name, ticker, pinned) VALUES (%s, %s, %s, 0) ON CONFLICT (user_id, name, ticker) DO NOTHING",
+                        (user_id, cat, t)
+                    )
+
+            conn_pg.commit()
+            conn_pg.close()
+    except Exception:
+        pass
 
 
 def sync_user_databases():

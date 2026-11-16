@@ -7,12 +7,14 @@ interface AuthState {
   activeTicker: string;
   isAuthModalOpen: boolean;
   authModalMode: "login" | "register";
+  sessionExpiredReason: string | null;
   setToken: (token: string | null) => void;
   setUser: (user: User | null) => void;
   setActiveTicker: (ticker: string) => void;
   openAuthModal: (mode?: "login" | "register") => void;
   closeAuthModal: () => void;
-  logout: () => void;
+  setSessionExpiredReason: (reason: string | null) => void;
+  logout: (reason?: string) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -21,14 +23,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   activeTicker: "TCS",
   isAuthModalOpen: false,
   authModalMode: "login",
+  sessionExpiredReason: null,
 
   setToken: (token) => {
     if (token) {
       localStorage.setItem("tradepilot_token", token);
+      localStorage.setItem("tradepilot_last_activity", Date.now().toString());
     } else {
       localStorage.removeItem("tradepilot_token");
+      localStorage.removeItem("tradepilot_last_activity");
     }
-    set({ token });
+    set({ token, sessionExpiredReason: null });
   },
 
   setUser: (user) => set({ user }),
@@ -39,9 +44,16 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   closeAuthModal: () => set({ isAuthModalOpen: false }),
 
-  logout: () => {
+  setSessionExpiredReason: (reason) => set({ sessionExpiredReason: reason }),
+
+  logout: (reason?: string) => {
     localStorage.removeItem("tradepilot_token");
-    set({ token: null, user: null });
+    localStorage.removeItem("tradepilot_last_activity");
+    set({
+      token: null,
+      user: null,
+      sessionExpiredReason: reason || null,
+    });
   },
 }));
 

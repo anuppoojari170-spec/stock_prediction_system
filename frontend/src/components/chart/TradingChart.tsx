@@ -10,9 +10,10 @@ import {
   HistogramData,
 } from "lightweight-charts";
 import { TrendingUp, Activity, BarChart2, Info, Sparkles, BookOpen, X } from "lucide-react";
-import { useAppStore } from "../../store/useAppStore";
+import { useAppStore, isIndexTicker, isIndianMarketOpen } from "../../store/useAppStore";
 import { ChartCandle, MLForecastData } from "../../types";
 import { predictionApi } from "../../services/api";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 type ChartStyle = "candles" | "line" | "area";
 type Timeframe = "1m" | "5m" | "15m" | "30m" | "1H" | "1D" | "1W" | "1M";
@@ -30,6 +31,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
 
   const { mode, theme, openOrderModal } = useAppStore();
 
+  const isIndex = isIndexTicker(ticker);
+  const isMarketOpen = isIndianMarketOpen();
+
   const [timeframe, setTimeframe] = useState<Timeframe>("1D");
   const [chartStyle, setChartStyle] = useState<ChartStyle>("candles");
   const [showSMA, setShowSMA] = useState(true);
@@ -39,6 +43,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
   const [candlesData, setCandlesData] = useState<ChartCandle[]>([]);
   const [mlForecast, setMlForecast] = useState<MLForecastData | null>(null);
   const [showCandleGuide, setShowCandleGuide] = useState(false);
+  const [isLoadingCandles, setIsLoadingCandles] = useState<boolean>(true);
 
   // Real-time market tick from WebSocket
   const liveTick = useAppStore(
@@ -49,6 +54,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
   // Fetch candles from real yfinance API; no static fallback
   useEffect(() => {
     let isMounted = true;
+    setIsLoadingCandles(true);
     const mappedPeriod =
       timeframe === "1W"
         ? "1y"
@@ -92,6 +98,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
       })
       .catch(() => {
         // API error — keep existing candles or leave empty
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingCandles(false);
+        }
       });
 
     // Fetch Machine Learning Multi-Horizon Forecast
@@ -598,23 +609,48 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
 
           <div className="h-6 w-px bg-[#26354B] hidden sm:block"></div>
 
-          {/* Quick Buy & Sell Execution Buttons */}
-          <div className="flex items-center space-x-1.5">
-            <button
-              onClick={() => openOrderModal(ticker, "BUY")}
-              className="px-3.5 py-1 rounded bg-[#00C087] hover:bg-[#00D998] active:scale-95 text-white text-xs font-bold font-mono tracking-wider shadow-sm transition-all flex items-center space-x-1 cursor-pointer"
-              title={`Place BUY order for ${ticker}`}
+          {/* Quick Buy & Sell Execution Buttons or Index Badge */}
+          {isIndex ? (
+            <div
+              className="px-2.5 py-1 rounded bg-[#1A263D] border border-[#26354B] text-[11px] font-mono font-medium text-[#94A3B8] flex items-center space-x-1.5"
+              title="Benchmark indices cannot be traded directly. Trade ETFs like NIFTYBEES or BANKBEES instead."
             >
-              <span>BUY</span>
-            </button>
-            <button
-              onClick={() => openOrderModal(ticker, "SELL")}
-              className="px-3.5 py-1 rounded bg-[#F04452] hover:bg-[#FF5564] active:scale-95 text-white text-xs font-bold font-mono tracking-wider shadow-sm transition-all flex items-center space-x-1 cursor-pointer"
-              title={`Place SELL order for ${ticker}`}
-            >
-              <span>SELL</span>
-            </button>
-          </div>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#E2B714]"></span>
+              <span>INDEX NON-TRADEABLE</span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-1.5">
+              <button
+                onClick={() => openOrderModal(ticker, "BUY")}
+                disabled={!isMarketOpen}
+                className={`px-3.5 py-1 rounded text-white text-xs font-bold font-mono tracking-wider shadow-sm transition-all flex items-center space-x-1 ${
+                  isMarketOpen
+                    ? "bg-[#00C087] hover:bg-[#00D998] active:scale-95 cursor-pointer"
+                    : "bg-[#00C087]/40 cursor-not-allowed opacity-60"
+                }`}
+                title={isMarketOpen ? `Place BUY order for ${ticker}` : "Market closed (Regular hours: 09:15 - 15:30 IST)"}
+              >
+                <span>BUY</span>
+              </button>
+              <button
+                onClick={() => openOrderModal(ticker, "SELL")}
+                disabled={!isMarketOpen}
+                className={`px-3.5 py-1 rounded text-white text-xs font-bold font-mono tracking-wider shadow-sm transition-all flex items-center space-x-1 ${
+                  isMarketOpen
+                    ? "bg-[#F04452] hover:bg-[#FF5564] active:scale-95 cursor-pointer"
+                    : "bg-[#F04452]/40 cursor-not-allowed opacity-60"
+                }`}
+                title={isMarketOpen ? `Place SELL order for ${ticker}` : "Market closed (Regular hours: 09:15 - 15:30 IST)"}
+              >
+                <span>SELL</span>
+              </button>
+              {!isMarketOpen && (
+                <span className="text-[10px] font-mono text-[#F5B942] bg-[#F5B942]/10 border border-[#F5B942]/20 px-1.5 py-0.5 rounded hidden sm:inline" title="Market closed (After Hours)">
+                  AFTER HOURS
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Timeframe Controls */}
@@ -625,13 +661,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors flex items-center space-x-1 ${
                 timeframe === tf
                   ? "bg-[#386BFF] text-white"
                   : "text-[#94A3B8] hover:text-[#F1F5FC]"
               }`}
             >
-              {tf}
+              <span>{tf}</span>
+              {isLoadingCandles && timeframe === tf && (
+                <CirclingLoader size="xs" color="text-white" />
+              )}
             </button>
           ))}
         </div>
@@ -814,6 +853,22 @@ export const TradingChart: React.FC<TradingChartProps> = ({ ticker }) => {
 
       {/* Chart Canvas Area */}
       <div className="relative w-full overflow-hidden">
+        {isLoadingCandles && (
+          <div className="absolute inset-0 bg-[#0B1120]/85 backdrop-blur-sm z-20 flex flex-col items-center justify-center space-y-3 transition-opacity duration-300">
+            <CirclingLoader size="lg" color="text-[#386BFF]" />
+            <div className="text-center px-4">
+              <div className="text-xs font-semibold text-[#F1F5FC] font-mono flex items-center justify-center space-x-1.5">
+                <span>Loading {ticker.toUpperCase()} Candlestick Data</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#386BFF]/20 text-[#386BFF] border border-[#386BFF]/30 font-bold">
+                  {timeframe}
+                </span>
+              </div>
+              <div className="text-[11px] text-[#94A3B8] mt-1 font-mono">
+                Fetching institutional OHLCV tick bars & volume...
+              </div>
+            </div>
+          </div>
+        )}
         <div
           ref={chartContainerRef}
           className="w-full h-[380px] md:h-[440px] relative bg-[#0B1120]"

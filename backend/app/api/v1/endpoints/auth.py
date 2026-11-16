@@ -167,7 +167,7 @@ def register(user_in: UserRegister, db: sqlite3.Connection = Depends(get_db)):
     # Mirror user to alternate database to prevent cross-session loss
     mirror_user_to_alternate_db(clean_email, clean_username, user_in.full_name.strip(), hashed_pw)
 
-    token = create_access_token(subject=user_id)
+    token = create_access_token(subject=user_id, username=clean_username, email=clean_email)
     return Token(access_token=token, token_type="bearer", expires_in_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
 
@@ -179,7 +179,7 @@ def login(login_in: UserLogin, db: sqlite3.Connection = Depends(get_db)):
 
     # Case-insensitive query
     cur.execute(
-        "SELECT id, password_hash FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)",
+        "SELECT id, email, username, password_hash FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)",
         (login_str, login_str)
     )
     user = cur.fetchone()
@@ -195,7 +195,9 @@ def login(login_in: UserLogin, db: sqlite3.Connection = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = create_access_token(subject=user["id"])
+    u_email = user["email"] if "email" in user else ""
+    u_uname = user["username"] if "username" in user else login_str
+    token = create_access_token(subject=user["id"], username=u_uname, email=u_email)
     return Token(access_token=token, token_type="bearer", expires_in_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
 
@@ -203,3 +205,14 @@ def login(login_in: UserLogin, db: sqlite3.Connection = Depends(get_db)):
 def get_profile(current_user: dict = Depends(get_current_user)):
     """Return profile details and available virtual balance for the authenticated user."""
     return UserOut(**current_user)
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(current_user: dict = Depends(get_current_user)):
+    """Extend the user's active session by issuing a refreshed JWT token (sliding session window)."""
+    token = create_access_token(
+        subject=current_user["id"],
+        username=current_user.get("username"),
+        email=current_user.get("email"),
+    )
+    return Token(access_token=token, token_type="bearer", expires_in_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

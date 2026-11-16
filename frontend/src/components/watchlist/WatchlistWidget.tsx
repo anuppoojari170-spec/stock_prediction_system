@@ -11,10 +11,11 @@ import {
   X,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAppStore } from "../../store/useAppStore";
+import { useAppStore, isIndexTicker, isIndianMarketOpen } from "../../store/useAppStore";
 import { watchlistApi } from "../../services/api";
 import { WatchlistItem, WatchlistCategoryOut } from "../../types";
 import { CirclingLoader } from "../common/CirclingLoader";
+import { StockSearchInput } from "../common/StockSearchInput";
 
 export const WatchlistWidget: React.FC = () => {
   const queryClient = useQueryClient();
@@ -363,26 +364,44 @@ export const WatchlistWidget: React.FC = () => {
 
                     {/* Hover Quick Action Buttons: Buy / Sell / Trash */}
                     <div className="absolute right-2 inset-y-0 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#1A2940] pl-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openOrderModal(item.ticker, "BUY");
-                        }}
-                        className="px-2 py-1 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-white text-[10px] font-bold"
-                        title="Quick Buy Order"
-                      >
-                        B
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openOrderModal(item.ticker, "SELL");
-                        }}
-                        className="px-2 py-1 rounded bg-[#F04452] hover:bg-[#ff5a68] text-white text-[10px] font-bold"
-                        title="Quick Sell Order"
-                      >
-                        S
-                      </button>
+                      {!isIndexTicker(item.ticker) && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isIndianMarketOpen()) {
+                                openOrderModal(item.ticker, "BUY");
+                              }
+                            }}
+                            disabled={!isIndianMarketOpen()}
+                            className={`px-2 py-1 rounded text-white text-[10px] font-bold ${
+                              isIndianMarketOpen()
+                                ? "bg-[#386BFF] hover:bg-[#4C7DFF] cursor-pointer"
+                                : "bg-[#386BFF]/40 cursor-not-allowed opacity-60"
+                            }`}
+                            title={isIndianMarketOpen() ? "Quick Buy Order" : "Market closed (After Hours)"}
+                          >
+                            B
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isIndianMarketOpen()) {
+                                openOrderModal(item.ticker, "SELL");
+                              }
+                            }}
+                            disabled={!isIndianMarketOpen()}
+                            className={`px-2 py-1 rounded text-white text-[10px] font-bold ${
+                              isIndianMarketOpen()
+                                ? "bg-[#F04452] hover:bg-[#ff5a68] cursor-pointer"
+                                : "bg-[#F04452]/40 cursor-not-allowed opacity-60"
+                            }`}
+                            title={isIndianMarketOpen() ? "Quick Sell Order" : "Market closed (After Hours)"}
+                          >
+                            S
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -410,51 +429,54 @@ export const WatchlistWidget: React.FC = () => {
       {/* Add Stock Modal */}
       {showAddStockModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm rounded-xl border border-[#26354B] bg-[#111C30] p-5 shadow-2xl">
+          <div className="w-full max-w-md rounded-xl border border-[#26354B] bg-[#111C30] p-5 shadow-2xl">
             <h4 className="font-heading font-bold text-sm text-[#F1F5FC] mb-1">
               Add Stock to {activeCategory}
             </h4>
             <p className="text-xs text-[#94A3B8] mb-3">
-              Enter the NSE symbol (e.g. RELIANCE, TCS, INFY, SBIN, TATAMOTORS).
+              Search and add any NSE stock into your custom watchlist.
             </p>
 
-            <input
-              type="text"
-              placeholder="e.g. RELIANCE"
-              value={newTickerInput}
-              onChange={(e) => setNewTickerInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleAddSecurity();
-              }}
-              autoFocus
-              className="w-full px-3 py-2 bg-[#0B1120] border border-[#26354B] rounded text-xs text-[#F1F5FC] uppercase font-mono-numbers focus:outline-none focus:border-[#386BFF] mb-3"
-            />
+            <div className="space-y-4">
+              <StockSearchInput
+                value={newTickerInput}
+                onChange={(sym) => setNewTickerInput(sym)}
+                onSelect={(sym) => setNewTickerInput(sym)}
+                onSubmit={handleAddSecurity}
+                label="NSE Symbol"
+                placeholder="Search 2,600+ NSE stocks..."
+                showChips={true}
+                autoFocus={true}
+              />
 
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => {
-                  setShowAddStockModal(false);
-                  setNewTickerInput("");
-                }}
-                disabled={isSubmitting}
-                className="flex-1 py-1.5 rounded bg-[#1A2940] hover:bg-[#26354B] text-xs text-[#94A3B8]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddSecurity}
-                disabled={isSubmitting || !newTickerInput.trim()}
-                className="flex-1 py-1.5 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50 flex items-center justify-center space-x-1.5"
-              >
-                {isSubmitting ? (
-                  <>
-                    <CirclingLoader size="xs" color="text-white" />
-                    <span>Adding...</span>
-                  </>
-                ) : (
-                  <span>Add Security</span>
-                )}
-              </button>
+              <div className="flex items-center space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddStockModal(false);
+                    setNewTickerInput("");
+                  }}
+                  disabled={isSubmitting}
+                  className="flex-1 py-1.5 rounded bg-[#1A2940] hover:bg-[#26354B] text-xs text-[#94A3B8] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddSecurity}
+                  disabled={isSubmitting || !newTickerInput.trim()}
+                  className="flex-1 py-1.5 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50 flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <CirclingLoader size="xs" color="text-white" />
+                      <span>Adding...</span>
+                    </>
+                  ) : (
+                    <span>Add Security</span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

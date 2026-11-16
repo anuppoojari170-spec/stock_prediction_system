@@ -95,6 +95,46 @@ interface AppState {
   removeFromWatchlist: (ticker: string) => void;
 }
 
+// Set of benchmark indices that cannot be traded directly on cash equity market
+export const INDEX_TICKERS = new Set([
+  "NIFTY 50", "NIFTY", "NIFTY50", "^NSEI", "NSE",
+  "BANK NIFTY", "BANKNIFTY", "NIFTYBANK", "^NSEBANK",
+  "SENSEX", "BSE SENSEX", "BSESN", "^BSESN",
+  "NIFTY IT", "NIFTYIT", "^CNXIT",
+  "FINNIFTY", "NIFTY MIDCAP", "NIFTY NEXT 50", "NIFTY 100", "NIFTY 500",
+  "INDIA VIX", "INDIAVIX", "^INDIAVIX"
+]);
+
+export function isIndexTicker(ticker?: string): boolean {
+  if (!ticker) return false;
+  const raw = ticker.trim().toUpperCase().replace(".NS", "").replace(".BO", "");
+  if (raw.startsWith("^")) return true;
+  // ETFs like NIFTYBEES, BANKBEES, GOLDBEES are tradeable on cash equity segment
+  if (raw.includes("BEES") || raw.endsWith("ETF")) return false;
+  if (INDEX_TICKERS.has(raw)) return true;
+  const normalized = raw.replace(/\s+/g, "").replace(/-/g, "");
+  for (const idx of INDEX_TICKERS) {
+    if (normalized === idx.replace(/\s+/g, "").replace(/-/g, "").replace("^", "")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function isIndianMarketOpen(): boolean {
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(now.getTime() + istOffset + now.getTimezoneOffset() * 60000);
+  const day = istDate.getDay(); // 0 = Sun, 6 = Sat
+  if (day === 0 || day === 6) {
+    return false;
+  }
+  const currentMinutes = istDate.getHours() * 60 + istDate.getMinutes();
+  const openMinutes = 9 * 60 + 15;  // 09:15 IST
+  const closeMinutes = 15 * 60 + 30; // 15:30 IST
+  return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+}
+
 // Empty watchlists container — completely driven by authenticated user's custom lists
 const defaultWatchlists: Record<string, WatchlistItem[]> = {};
 
@@ -239,6 +279,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     applyIndexTick: (indexTick) => {
+      if (!indexTick?.name) return;
       set((state) => ({
         liveIndices: {
           ...state.liveIndices,
@@ -249,10 +290,12 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     applyDepth: (depth) => {
+      const ticker = depth && typeof depth.ticker === "string" ? depth.ticker.toUpperCase() : null;
+      if (!ticker) return;
       set((state) => ({
         liveDepth: {
           ...state.liveDepth,
-          [depth.ticker.toUpperCase()]: depth,
+          [ticker]: depth,
         },
       }));
     },
@@ -298,6 +341,8 @@ export const useAppStore = create<AppState>((set, get) => {
         isOrderModalOpen: true,
         activeTicker: ticker ? ticker.toUpperCase() : state.activeTicker,
         orderSide: side,
+        orderPrice: 0.0,
+        triggerPrice: 0.0,
       })),
     closeOrderModal: () => set({ isOrderModalOpen: false }),
 
@@ -307,6 +352,21 @@ export const useAppStore = create<AppState>((set, get) => {
 
     submitOrder: (orderData) => {
       const state = get();
+
+      if (isIndexTicker(orderData.ticker)) {
+        return {
+          success: false,
+          message: `Benchmark index '${orderData.ticker}' cannot be traded directly. To take positions, trade index ETFs like NIFTYBEES or BANKBEES instead.`
+        };
+      }
+
+      if (!isIndianMarketOpen()) {
+        return {
+          success: false,
+          message: "Indian stock markets (NSE/BSE) are currently closed. Regular trading session is Monday to Friday, 09:15 AM to 03:30 PM IST. Orders cannot be placed after market hours."
+        };
+      }
+
       const totalCost = orderData.quantity * orderData.price;
 
       if (orderData.side === "BUY" && totalCost > state.virtualBalance) {

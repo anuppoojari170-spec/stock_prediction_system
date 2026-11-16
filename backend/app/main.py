@@ -25,13 +25,39 @@ async def lifespan(app: FastAPI):
     market_streamer.stop()
 
 
+API_DESCRIPTION = """
+## TradePilot AI — High-Frequency NSE/BSE Trading & Market Intelligence API
+
+### 🔑 Pre-Configured Test Credentials:
+Test authenticated endpoints directly using the pre-seeded test accounts:
+
+| Role | Username / Login | Password | Virtual Margin | Sample Holdings |
+| :--- | :--- | :--- | :--- | :--- |
+| **API Test User** | `testuser` | `TestPassword123!` | ₹10,00,000.00 | RELIANCE (10), INFY (25), TCS (5) |
+| **Demo Trader** | `demo` | `demo123` | ₹10,00,000.00 | RELIANCE (15), HDFCBANK (30) |
+
+---
+### 🚀 How to Authenticate & Test Protected APIs in Swagger:
+1. Call **`POST /api/v1/auth/login`** with:
+   ```json
+   {
+     "login": "testuser",
+     "password": "TestPassword123!"
+   }
+   ```
+2. Copy the `access_token` from the response.
+3. Click the **Authorize 🔓** button at the top right of this Swagger page, paste your token, and click **Authorize**.
+4. Test protected routes like **`GET /api/v1/trading/portfolio`**, **`POST /api/v1/trading/buy`**, **`GET /api/v1/auth/me`**, etc.
+"""
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Modern Full-Stack Trading Platform API with Multi-User Authentication, High-Speed Caching & Financial Analytics.",
+    description=API_DESCRIPTION,
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
+    swagger_ui_parameters={"persistAuthorization": True},
 )
 
 # Configure CORS

@@ -243,6 +243,7 @@ export interface ChartHistoryResponse {
 export interface Holding {
   ticker: string;
   companyName?: string;
+  sector?: string;
   shares: number;
   avg_price: number;
   current_price: number;
@@ -333,6 +334,7 @@ export interface NewsItem {
   sentiment: "BULLISH" | "BEARISH" | "NEUTRAL";
   summary: string;
   relatedTickers: string[];
+  url?: string | null;
 }
 
 export type WsConnectionStatus = "connected" | "connecting" | "disconnected";

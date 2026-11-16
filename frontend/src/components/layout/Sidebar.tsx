@@ -75,7 +75,7 @@ export const Sidebar: React.FC = () => {
           {!isSidebarCollapsed && (
             <div className="flex flex-col">
               <span className="font-heading font-bold text-sm tracking-wider text-[#F1F5FC] uppercase">
-                Trade AI Pilot
+                TradePilot AI
               </span>
               <span className="text-[10px] text-[#386BFF] font-mono tracking-wider uppercase font-semibold">
                 AI Trading Terminal

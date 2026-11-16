@@ -1,10 +1,22 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Newspaper, Clock, RefreshCw } from "lucide-react";
+import { Newspaper, Clock, RefreshCw, ExternalLink } from "lucide-react";
 import { NewsItem } from "../../types";
 import { marketApi } from "../../services/api";
 import { useAppStore } from "../../store/useAppStore";
 import { CirclingLoader } from "../common/CirclingLoader";
+
+const sanitizeSummary = (raw: string): string => {
+  if (!raw) return "";
+  return raw
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+};
 
 const fallbackNews: NewsItem[] = [
   {
@@ -161,25 +173,39 @@ export const NewsView: React.FC = () => {
               </h4>
 
               <p className="text-xs text-[#94A3B8] leading-relaxed mt-1.5">
-                {item.summary}
+                {sanitizeSummary(item.summary)}
               </p>
 
-              {/* Related Tickers */}
-              <div className="flex items-center space-x-2 mt-3 pt-2 border-t border-[#26354B]/50 text-xs">
-                <span className="text-[#64748B] text-[11px]">Related:</span>
-                {item.relatedTickers.map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => {
-                      setActiveTicker(t);
-                      setActiveTab("overview");
-                    }}
-                    className="px-1.5 py-0.5 rounded bg-[#1A2940] hover:bg-[#386BFF] text-[#F1F5FC] font-mono text-[10px] font-bold transition-colors cursor-pointer"
-                    title={`View ${t} in Terminal`}
+              {/* Related Tickers & External Link */}
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2 border-t border-[#26354B]/50 text-xs">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[#64748B] text-[11px]">Related:</span>
+                  {item.relatedTickers.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        setActiveTicker(t);
+                        setActiveTab("overview");
+                      }}
+                      className="px-1.5 py-0.5 rounded bg-[#1A2940] hover:bg-[#386BFF] text-[#F1F5FC] font-mono text-[10px] font-bold transition-colors cursor-pointer"
+                      title={`View ${t} in Terminal`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+
+                {item.url && (
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center space-x-1 text-[11px] text-[#386BFF] hover:text-[#60A5FA] font-medium transition-colors cursor-pointer"
                   >
-                    {t}
-                  </button>
-                ))}
+                    <span>Read Article</span>
+                    <ExternalLink size={11} />
+                  </a>
+                )}
               </div>
             </div>
           )))}

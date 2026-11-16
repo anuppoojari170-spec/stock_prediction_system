@@ -110,6 +110,47 @@ tickers_in_wl = [w["ticker"] for w in watchlist]
 print("   User Watchlist:", ", ".join(tickers_in_wl))
 assert "INFY" in tickers_in_wl
 
+# 7. Index Trading Rejection & After-Hours Market Protection
+print("\n7. Testing Index Trading Rejection & After-Hours Market Protection...")
+from unittest.mock import patch
+from fastapi import HTTPException
+from app.services.trading import is_index_ticker, sell_stock
+
+assert is_index_ticker("NIFTY 50") is True
+assert is_index_ticker("NIFTY") is True
+assert is_index_ticker("SENSEX") is True
+assert is_index_ticker("BANK NIFTY") is True
+assert is_index_ticker("^NSEI") is True
+assert is_index_ticker("NIFTYBEES") is False
+assert is_index_ticker("BANKBEES") is False
+assert is_index_ticker("RELIANCE") is False
+print("   Symbol index detection: PASSED")
+
+# Verify buy_stock blocks indices
+try:
+    buy_stock(user_id=test_user_id, ticker="NIFTY 50", quantity=10, db=conn)
+    assert False, "NIFTY 50 buy should have been blocked"
+except HTTPException as e:
+    assert e.status_code == 400
+    print("   NIFTY 50 buy blocked with 400:", e.detail)
+
+# Verify sell_stock blocks indices
+try:
+    sell_stock(user_id=test_user_id, ticker="SENSEX", quantity=5, db=conn)
+    assert False, "SENSEX sell should have been blocked"
+except HTTPException as e:
+    assert e.status_code == 400
+    print("   SENSEX sell blocked with 400:", e.detail)
+
+# Verify after-hours protection
+with patch("app.services.trading.is_indian_market_open", return_value=False):
+    try:
+        buy_stock(user_id=test_user_id, ticker="RELIANCE", quantity=1, db=conn)
+        assert False, "After-hours buy should have been blocked"
+    except HTTPException as e:
+        assert e.status_code == 400
+        print("   After-hours order blocked with 400:", e.detail)
+
 conn.close()
 
 print("\n==================================================")

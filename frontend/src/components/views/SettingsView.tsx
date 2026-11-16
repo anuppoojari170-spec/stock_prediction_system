@@ -8,6 +8,7 @@ import {
   Database,
   RotateCcw,
   CheckCircle2,
+  Clock,
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { ExchangeType } from "../../types";
@@ -172,6 +173,44 @@ export const SettingsView: React.FC = () => {
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#00C087]/15 text-[#00C087] border border-[#00C087]/30">
                 ACTIVE
               </span>
+            </div>
+          </div>
+
+          {/* Session Security & Inactivity Timeout */}
+          <div className="pt-4 border-t border-[#26354B]">
+            <label className="text-xs font-semibold text-[#F1F5FC] block mb-1">
+              Account Security & Session Timeout
+            </label>
+            <p className="text-xs text-[#94A3B8] mb-3">
+              Automated terminal session timeout adhering to SEBI & regulatory financial cybersecurity benchmarks.
+            </p>
+            <div className="p-3.5 rounded bg-[#0B1120] border border-[#26354B] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded bg-[#386BFF]/15 text-[#386BFF] shrink-0">
+                  <Clock size={18} />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold text-[#F1F5FC]">
+                      30-Minute Inactivity Auto-Lock
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#00C087]/15 text-[#00C087] border border-[#00C087]/30">
+                      ENFORCED
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-[#94A3B8]">
+                    JWT token and local session auto-expire after 30 minutes of idle time. Warns 2 minutes prior.
+                  </span>
+                </div>
+              </div>
+              <div className="text-left sm:text-right shrink-0">
+                <span className="font-mono text-xs font-bold text-[#F1F5FC] block">
+                  30 Minutes
+                </span>
+                <span className="text-[10px] text-[#64748B] font-mono">
+                  1,800s Idle Max
+                </span>
+              </div>
             </div>
           </div>
 

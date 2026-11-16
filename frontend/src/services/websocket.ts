@@ -66,13 +66,13 @@ class MarketStreamService {
               break;
 
             case "INDEX_TICK":
-              if (msg.data) {
+              if (msg.data && (msg.data as IndexTick).name) {
                 currentStore.applyIndexTick(msg.data as IndexTick);
               }
               break;
 
             case "DEPTH":
-              if (msg.data) {
+              if (msg.data && (msg.data as LiveDepthData).ticker) {
                 currentStore.applyDepth(msg.data as LiveDepthData);
               }
               break;

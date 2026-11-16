@@ -13,6 +13,7 @@ _TICKERS = [
     "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "BHARTIARTL",
     "SBIN", "TATAMOTORS", "ITC", "WIPRO", "BAJFINANCE", "KOTAKBANK",
     "LT", "AXISBANK", "HINDUNILVR", "MARUTI", "ASIANPAINT", "HCLTECH", "LTIM",
+    "BSE", "NIFTYBEES", "BANKBEES",
 ]
 
 # Spread sizes per ticker
@@ -22,6 +23,7 @@ _SPREADS: Dict[str, float] = {
     "ITC": 0.10, "WIPRO": 0.10, "BAJFINANCE": 1.00, "KOTAKBANK": 0.30,
     "LT": 0.50, "AXISBANK": 0.20, "HINDUNILVR": 0.50, "MARUTI": 2.00,
     "ASIANPAINT": 0.50, "HCLTECH": 0.25, "LTIM": 1.00,
+    "BSE": 0.50, "NIFTYBEES": 0.05, "BANKBEES": 0.10,
 }
 
 _BASE_VOLUMES: Dict[str, int] = {
@@ -30,6 +32,7 @@ _BASE_VOLUMES: Dict[str, int] = {
     "ITC": 7100000, "WIPRO": 4150000, "BAJFINANCE": 1200000, "KOTAKBANK": 3100000,
     "LT": 1850000, "AXISBANK": 4500000, "HINDUNILVR": 1400000, "MARUTI": 650000,
     "ASIANPAINT": 1100000, "HCLTECH": 2800000, "LTIM": 850000,
+    "BSE": 2500000, "NIFTYBEES": 4500000, "BANKBEES": 3200000,
 }
 
 # Major Indian indices (actual current baseline)
@@ -231,12 +234,12 @@ class MarketStreamer:
 
     def generate_depth(self, ticker: str) -> dict:
         """Generates realistic 5-level Indian stock depth for a given ticker."""
-        stock = self.stocks.get(ticker.upper())
-        if not stock:
-            return {"bids": [], "asks": []}
-
-        price = stock["price"]
-        spread = stock["spread"]
+        ticker_up = (ticker or "RELIANCE").strip().upper()
+        stock = self.stocks.get(ticker_up)
+        
+        # If stock not found in tracked cache, use fallback baseline so depth book renders reliably
+        price = stock["price"] if stock else 1000.0
+        spread = stock["spread"] if stock else round(price * 0.0008, 2)
         tick_size = 0.05 if price < 1000 else (0.10 if price < 3000 else 0.25)
 
         best_bid = round(price - spread / 2, 2)
@@ -256,7 +259,7 @@ class MarketStreamer:
             a_orders = int(random.randint(6, 45) + (i * 3))
             asks.append({"price": a_price, "qty": a_qty, "orders": a_orders})
 
-        return {"ticker": ticker.upper(), "bids": bids, "asks": asks}
+        return {"ticker": ticker_up, "bids": bids, "asks": asks}
 
     def get_snapshot(self) -> dict:
         """Returns instantaneous snapshot of all stocks, indices and market hours status."""

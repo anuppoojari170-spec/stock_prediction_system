@@ -12,26 +12,16 @@ import {
   X,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAppStore } from "../../store/useAppStore";
+import { useAppStore, isIndexTicker, isIndianMarketOpen } from "../../store/useAppStore";
 import { watchlistApi } from "../../services/api";
 import { WatchlistItem } from "../../types";
 import { CirclingLoader } from "../common/CirclingLoader";
-
-const popularSuggestions = [
-  "RELIANCE",
-  "TCS",
-  "HDFCBANK",
-  "INFY",
-  "ICICIBANK",
-  "BHARTIARTL",
-  "SBIN",
-  "TATAMOTORS",
-  "ITC",
-];
+import { StockSearchInput } from "../common/StockSearchInput";
 
 export const WatchlistView: React.FC = () => {
   const queryClient = useQueryClient();
   const { setActiveTicker, openOrderModal, setActiveTab, liveTicks } = useAppStore();
+  const isMarketOpen = isIndianMarketOpen();
 
   const [selectedCat, setSelectedCat] = useState<string>("Watchlist 1");
   const [searchFilter, setSearchFilter] = useState<string>("");
@@ -368,18 +358,41 @@ export const WatchlistView: React.FC = () => {
                         </td>
                         <td className="py-2.5 px-3 text-center">
                           <div className="flex items-center justify-center space-x-1.5 font-sans">
-                            <button
-                              onClick={() => openOrderModal(item.ticker, "BUY")}
-                              className="px-2.5 py-1 rounded bg-[#386BFF] hover:bg-[#4C7DFF] text-white text-[10px] font-semibold transition-colors"
-                            >
-                              Buy
-                            </button>
-                            <button
-                              onClick={() => openOrderModal(item.ticker, "SELL")}
-                              className="px-2.5 py-1 rounded bg-[#F04452] hover:bg-[#ff5a68] text-white text-[10px] font-semibold transition-colors"
-                            >
-                              Sell
-                            </button>
+                            {isIndexTicker(item.ticker) ? (
+                              <span
+                                className="px-2 py-0.5 rounded text-[10px] font-mono text-[#94A3B8] bg-[#111C30] border border-[#26354B]"
+                                title="Benchmark index cannot be traded directly"
+                              >
+                                Index
+                              </span>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => openOrderModal(item.ticker, "BUY")}
+                                  disabled={!isMarketOpen}
+                                  className={`px-2.5 py-1 rounded text-white text-[10px] font-semibold transition-colors ${
+                                    isMarketOpen
+                                      ? "bg-[#386BFF] hover:bg-[#4C7DFF] cursor-pointer"
+                                      : "bg-[#386BFF]/40 cursor-not-allowed opacity-60"
+                                  }`}
+                                  title={isMarketOpen ? "Buy stock" : "Market closed (After Hours)"}
+                                >
+                                  Buy
+                                </button>
+                                <button
+                                  onClick={() => openOrderModal(item.ticker, "SELL")}
+                                  disabled={!isMarketOpen}
+                                  className={`px-2.5 py-1 rounded text-white text-[10px] font-semibold transition-colors ${
+                                    isMarketOpen
+                                      ? "bg-[#F04452] hover:bg-[#ff5a68] cursor-pointer"
+                                      : "bg-[#F04452]/40 cursor-not-allowed opacity-60"
+                                  }`}
+                                  title={isMarketOpen ? "Sell stock" : "Market closed (After Hours)"}
+                                >
+                                  Sell
+                                </button>
+                              </>
+                            )}
                             <button
                               onClick={() => handleRemove(item.ticker)}
                               disabled={deletingTicker === item.ticker}
@@ -453,57 +466,42 @@ export const WatchlistView: React.FC = () => {
       {/* Modal 2: Add Security to Watchlist */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm rounded-xl border border-[#26354B] bg-[#111C30] p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-xl border border-[#26354B] bg-[#111C30] p-6 shadow-2xl">
             <h4 className="font-heading font-bold text-base text-[#F1F5FC] mb-1">
               Add Stock to {effectiveCat}
             </h4>
             <p className="text-xs text-[#94A3B8] mb-4">
-              Enter any NSE symbol to add it into your custom watchlist.
+              Search and add any NSE stock into your custom watchlist.
             </p>
 
             <div className="space-y-4">
-              <div>
-                <label className="text-xs text-[#94A3B8] block mb-1">NSE Symbol</label>
-                <input
-                  type="text"
-                  placeholder="e.g. BAJFINANCE, RELIANCE, TCS"
-                  value={newTickerInput}
-                  onChange={(e) => setNewTickerInput(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#0B1120] border border-[#26354B] rounded-lg text-sm text-[#F1F5FC] uppercase font-mono-numbers focus:outline-none focus:border-[#386BFF]"
-                  autoFocus
-                />
-              </div>
-
-              {/* Quick suggestions */}
-              <div>
-                <span className="text-[11px] text-[#94A3B8] block mb-1.5 font-medium">
-                  Quick Add Popular Stocks:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {popularSuggestions.map((sym) => (
-                    <button
-                      key={sym}
-                      type="button"
-                      onClick={() => handleAddNewSecurity(sym)}
-                      className="px-2 py-1 bg-[#1A2940] hover:bg-[#386BFF]/20 hover:text-[#386BFF] text-[10px] text-[#94A3B8] rounded border border-[#26354B] transition-colors"
-                    >
-                      + {sym}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <StockSearchInput
+                value={newTickerInput}
+                onChange={(sym) => setNewTickerInput(sym)}
+                onSelect={(sym) => setNewTickerInput(sym)}
+                onSubmit={() => handleAddNewSecurity()}
+                label="NSE Symbol"
+                placeholder="Search 2,600+ NSE stocks (e.g. EMS, Tata)..."
+                showChips={true}
+                autoFocus={true}
+              />
 
               <div className="flex items-center space-x-2 pt-2">
                 <button
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 py-2 rounded-lg bg-[#1A2940] hover:bg-[#26354B] text-xs text-[#94A3B8]"
+                  type="button"
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setNewTickerInput("");
+                  }}
+                  className="flex-1 py-2 rounded-lg bg-[#1A2940] hover:bg-[#26354B] text-xs text-[#94A3B8] transition-colors"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleAddNewSecurity()}
                   disabled={!newTickerInput.trim() || isAddingStock}
-                  className="flex-1 py-2 rounded-lg bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50 flex items-center justify-center space-x-1.5"
+                  className="flex-1 py-2 rounded-lg bg-[#386BFF] hover:bg-[#4C7DFF] text-xs font-semibold text-white shadow-md shadow-[#386BFF]/30 disabled:opacity-50 flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
                 >
                   {isAddingStock ? (
                     <>

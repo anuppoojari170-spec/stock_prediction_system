@@ -20,8 +20,8 @@ import {
   MultiModelEquityPoint,
 } from "../../types";
 import { useAppStore } from "../../store/useAppStore";
-
-const POPULAR_TICKERS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN"];
+import { StockSearchInput } from "../common/StockSearchInput";
+import { CirclingLoader } from "../common/CirclingLoader";
 
 export const ModelBenchmarkTab: React.FC = () => {
   const activeGlobalTicker = useAppStore((state) => state.activeTicker);
@@ -132,37 +132,17 @@ export const ModelBenchmarkTab: React.FC = () => {
       {/* Top Configurator Bar */}
       <div className="nexus-card p-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          {/* Ticker Input & Popular Chips */}
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-              Target Stock Symbol
-            </label>
-            <input
-              type="text"
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value.toUpperCase())}
-              placeholder="e.g. RELIANCE"
-              className="w-full px-3 py-2 bg-[#0B1120] border border-[#26354B] rounded text-xs font-mono font-bold text-[#F1F5FC] focus:outline-none focus:border-[#386BFF]"
-            />
-            <div className="flex items-center space-x-1.5 mt-2 overflow-x-auto no-scrollbar">
-              {POPULAR_TICKERS.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => {
-                    setTicker(t);
-                    runBenchmark(t);
-                  }}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
-                    ticker === t
-                      ? "bg-[#386BFF] text-white font-bold"
-                      : "bg-[#162238] text-[#94A3B8] hover:text-[#F1F5FC]"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Dynamic NSE Stock Search */}
+          <StockSearchInput
+            value={ticker}
+            onChange={(sym) => setTicker(sym)}
+            onSelect={(sym) => {
+              setTicker(sym);
+              runBenchmark(sym);
+            }}
+            label="Target Stock Symbol"
+            placeholder="Search 2,600+ NSE stocks..."
+          />
 
           {/* Lookback Window */}
           <div>
@@ -237,6 +217,21 @@ export const ModelBenchmarkTab: React.FC = () => {
       {error && (
         <div className="p-3 rounded-lg bg-[#F04452]/10 border border-[#F04452]/30 text-xs text-[#F04452] flex items-center space-x-2">
           <span>⚠️ {error}</span>
+        </div>
+      )}
+
+      {/* Initial Benchmark Loading State */}
+      {loading && !benchmarkData && (
+        <div className="nexus-card p-12 flex flex-col items-center justify-center space-y-3">
+          <CirclingLoader size="lg" color="text-[#386BFF]" />
+          <div className="text-center">
+            <span className="text-sm font-semibold text-[#F1F5FC] font-mono block">
+              Benchmarking AI Quantitative Architectures for {ticker}
+            </span>
+            <span className="text-xs text-[#94A3B8] font-mono mt-1 block">
+              Evaluating LSTM, XGBoost, GRU, Random Forest & Transformer across {period}...
+            </span>
+          </div>
         </div>
       )}
 
@@ -697,17 +692,17 @@ export const ModelBenchmarkTab: React.FC = () => {
         </div>
       )}
 
-      {/* College Project Viva Voce Defense Guide */}
+      {/* Quantitative Architecture & Model Evaluation Guide */}
       {benchmarkData && benchmarkData.viva_defense_guide && (
         <div className="nexus-card p-4">
           <div className="flex items-center space-x-2 pb-3 border-b border-[#26354B]">
             <Sparkles size={18} className="text-[#F59E0B]" />
             <div>
               <h3 className="font-heading font-bold text-sm text-[#F1F5FC]">
-                Academic Defense & Viva Voce Q&A Cheat Sheet
+                Quantitative Architecture & Model Evaluation Guide
               </h3>
               <p className="text-[11px] text-[#94A3B8]">
-                Key questions and academic rationales to present during external project evaluation and thesis defense.
+                Key quantitative rationales and architectural comparisons between tree-based and deep learning models.
               </p>
             </div>
           </div>

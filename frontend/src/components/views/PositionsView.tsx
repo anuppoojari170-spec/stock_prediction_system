@@ -2,12 +2,13 @@ import React, { useState, useMemo } from "react";
 import { Layers } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { tradingApi } from "../../services/api";
-import { useAppStore } from "../../store/useAppStore";
+import { useAppStore, isIndianMarketOpen } from "../../store/useAppStore";
 import { Holding } from "../../types";
 import { CirclingLoader } from "../common/CirclingLoader";
 
 export const PositionsView: React.FC = () => {
   const { liveTicks, openOrderModal } = useAppStore();
+  const isMarketOpen = isIndianMarketOpen();
   const [filterTab, setFilterTab] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
 
   const { data: holdings = [], isLoading: isPositionsLoading } = useQuery<Holding[]>({
@@ -180,8 +181,13 @@ export const PositionsView: React.FC = () => {
                       <td className="py-2.5 px-3 text-center">
                         <button
                           onClick={() => openOrderModal(pos.ticker, "SELL")}
-                          className="px-2.5 py-1 rounded bg-[#F04452]/20 hover:bg-[#F04452] text-[#F04452] hover:text-white text-[10px] font-semibold border border-[#F04452]/40 transition-colors"
-                          title="Place Sell order to exit position"
+                          disabled={!isMarketOpen}
+                          className={`px-2.5 py-1 rounded text-[10px] font-semibold border transition-colors ${
+                            isMarketOpen
+                              ? "bg-[#F04452]/20 hover:bg-[#F04452] text-[#F04452] hover:text-white border-[#F04452]/40 cursor-pointer"
+                              : "bg-[#F04452]/10 text-[#F04452]/50 border-[#F04452]/20 cursor-not-allowed opacity-60"
+                          }`}
+                          title={isMarketOpen ? "Place Sell order to exit position" : "Market closed (After Hours)"}
                         >
                           Exit Position
                         </button>

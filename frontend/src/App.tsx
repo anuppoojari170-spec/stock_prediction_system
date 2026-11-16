@@ -16,6 +16,7 @@ import { SettingsView } from "./components/views/SettingsView";
 import { AuthModal } from "./components/auth/AuthModal";
 import { OrderEntryModal } from "./components/trading/OrderEntryModal";
 import { FloatingAiCopilot } from "./components/assistant/FloatingAiCopilot";
+import { SessionTimeoutManager } from "./components/auth/SessionTimeoutManager";
 import { LoginPage } from "./components/auth/LoginPage";
 import { useAppStore } from "./store/useAppStore";
 import { useAuthStore } from "./store/useAuthStore";
@@ -97,6 +98,9 @@ const DashboardContent: React.FC = () => {
 
       {/* Interactive Floating AI Trading Copilot */}
       <FloatingAiCopilot />
+
+      {/* 30-Minute Inactivity Session Manager & Warning Dialog */}
+      <SessionTimeoutManager />
     </div>
   );
 };
@@ -130,7 +134,7 @@ const MainApp: React.FC = () => {
       <div className="min-h-screen bg-[#0B1120] flex flex-col items-center justify-center text-[#F1F5FC] select-none">
         <div className="w-10 h-10 border-4 border-[#386BFF]/25 border-t-[#386BFF] rounded-full animate-spin mb-4" />
         <span className="text-xs font-mono text-[#94A3B8]">
-          Authenticating Trade AI Pilot Session...
+          Authenticating TradePilot AI Session...
         </span>
       </div>
     );

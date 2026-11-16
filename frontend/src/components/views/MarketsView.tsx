@@ -7,7 +7,6 @@ import {
 import { useAppStore } from "../../store/useAppStore";
 import { TradingChart } from "../chart/TradingChart";
 import { ErrorBoundary } from "../common/ErrorBoundary";
-import { OrderEntryPanel } from "../trading/OrderEntryPanel";
 import { MarketDepth } from "../trading/MarketDepth";
 import { SentimentGauge } from "../market/SentimentGauge";
 import { StockDetails } from "../../types";
@@ -235,12 +234,11 @@ export const MarketsView: React.FC = () => {
           <MarketDepth ticker={activeTicker} />
         </div>
 
-        {/* Right Column: AI Sentiment Engine + Order Placement Panel */}
+        {/* Right Column: AI Sentiment Engine */}
         <div className="lg:col-span-4 space-y-4">
           <ErrorBoundary fallbackTitle="AI Sentiment & Prediction Engine">
             <SentimentGauge ticker={activeTicker} />
           </ErrorBoundary>
-          <OrderEntryPanel ticker={activeTicker} />
         </div>
       </div>
     </div>

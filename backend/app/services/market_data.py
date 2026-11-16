@@ -12,12 +12,12 @@ from app.core.cache import market_cache
 logger = logging.getLogger("TradeAIPilot.MarketData")
 
 
-# Default tracked universe of top liquid Indian large-caps (NSE)
+# Default tracked universe of top liquid Indian large-caps and key assets (NSE)
 TRACKED_UNIVERSE = [
     "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK",
     "WIPRO", "SBIN", "ITC", "HINDUNILVR", "BAJFINANCE",
     "KOTAKBANK", "LT", "MARUTI", "AXISBANK", "ASIANPAINT",
-    "BHARTIARTL", "HCLTECH",
+    "BHARTIARTL", "HCLTECH", "BSE", "NIFTYBEES", "BANKBEES",
 ]
 
 MARKET_INDICES = {
@@ -49,6 +49,14 @@ FALLBACK_PRICES: Dict[str, float] = {
     "TATAMOTORS": 287.40,
     "TMPV": 287.40,
     "LTIM": 5320.00,
+    "NIFTY 50": 25144.30,
+    "SENSEX": 81592.45,
+    "BANK NIFTY": 61034.10,
+    "NIFTY IT": 42150.30,
+    "BSE": 2680.00,
+    "NIFTYBEES": 284.50,
+    "BANKBEES": 598.20,
+    "GOLDBEES": 74.30,
 }
 
 FALLBACK_INDICES = [
@@ -163,6 +171,60 @@ COMPANY_PROFILES: Dict[str, dict] = {
         "divYield": 0.80,
         "description": "Tata Motors is an automotive manufacturing powerhouse producing passenger cars, commercial vehicles, and electric vehicles, as well as luxury vehicles through Jaguar Land Rover.",
     },
+    "NIFTY 50": {
+        "companyName": "NIFTY 50 Index (NSE)",
+        "sector": "Indian Benchmark Equity Index",
+        "marketCap": "₹195 Lakh Cr (Combined)",
+        "peRatio": 22.8,
+        "pbRatio": 4.1,
+        "divYield": 1.25,
+        "description": "The NIFTY 50 is the flagship index on the National Stock Exchange of India (NSE), tracking the weighted performance of 50 of the largest and most liquid Indian blue-chip equities.",
+    },
+    "SENSEX": {
+        "companyName": "BSE SENSEX (30 Blue-chips)",
+        "sector": "Indian Benchmark Equity Index",
+        "marketCap": "₹160 Lakh Cr (Combined)",
+        "peRatio": 23.4,
+        "pbRatio": 3.9,
+        "divYield": 1.18,
+        "description": "The BSE SENSEX is India's oldest market benchmark index, tracking 30 well-established and financially sound companies listed on the Bombay Stock Exchange (BSE).",
+    },
+    "BANK NIFTY": {
+        "companyName": "NIFTY Bank Index (NSE)",
+        "sector": "Banking & Financial Services",
+        "marketCap": "₹42 Lakh Cr (Combined)",
+        "peRatio": 15.6,
+        "pbRatio": 2.2,
+        "divYield": 0.95,
+        "description": "The NIFTY Bank Index tracks the 12 most liquid and large-capitalized banking stocks listed on the National Stock Exchange, reflecting India's banking sector health.",
+    },
+    "BSE": {
+        "companyName": "BSE Limited",
+        "sector": "Financial Markets Infrastructure & Exchanges",
+        "marketCap": "₹36,500 Cr",
+        "peRatio": 48.2,
+        "pbRatio": 7.9,
+        "divYield": 0.85,
+        "description": "BSE Limited operates Asia's oldest stock exchange, providing electronic trading platforms for equities, derivatives, mutual funds, and debt securities in India.",
+    },
+    "NIFTYBEES": {
+        "companyName": "Nippon India ETF Nifty 50 BeES",
+        "sector": "Exchange Traded Funds (ETF)",
+        "marketCap": "₹32,000 Cr",
+        "peRatio": 22.8,
+        "pbRatio": 4.1,
+        "divYield": 1.25,
+        "description": "Nifty BeES is India's first exchange-traded fund, designed to provide returns that closely correspond to the total returns of the securities represented by the NIFTY 50 Index.",
+    },
+    "BANKBEES": {
+        "companyName": "Nippon India ETF Nifty Bank BeES",
+        "sector": "Exchange Traded Funds (ETF)",
+        "marketCap": "₹14,500 Cr",
+        "peRatio": 15.6,
+        "pbRatio": 2.2,
+        "divYield": 0.95,
+        "description": "Bank BeES is an exchange-traded fund tracking the NIFTY Bank Index, providing direct equity-segment exposure to India's top banking institutions.",
+    },
 }
 
 
@@ -196,10 +258,29 @@ class CachedYFinanceProvider(BaseMarketDataProvider):
 
     def _normalize_ticker(self, ticker: str) -> str:
         t = ticker.strip().upper()
+        index_map = {
+            "NIFTY 50": "^NSEI",
+            "NIFTY": "^NSEI",
+            "NIFTY50": "^NSEI",
+            "SENSEX": "^BSESN",
+            "BANK NIFTY": "^NSEBANK",
+            "BANKNIFTY": "^NSEBANK",
+            "NIFTY IT": "^CNXIT",
+        }
+        if t in index_map:
+            return index_map[t]
         return t if t.endswith(".NS") or t.startswith("^") else f"{t}.NS"
 
     def get_live_price(self, ticker: str) -> Optional[float]:
         clean_ticker = ticker.strip().upper().replace(".NS", "")
+        alias_map = {
+            "NIFTY": "NIFTY 50",
+            "NIFTY50": "NIFTY 50",
+            "BANKNIFTY": "BANK NIFTY",
+            "NIFTYBANK": "BANK NIFTY",
+        }
+        clean_ticker = alias_map.get(clean_ticker, clean_ticker)
+
         # Check cache
         cached = self.cache.get(f"stock_data:{clean_ticker}:live")
         if cached is not None:
@@ -281,24 +362,51 @@ class CachedYFinanceProvider(BaseMarketDataProvider):
 
         movers = [r for r in results if r is not None and r["price"] > 0]
         if not movers:
-            # Fallback to local verified prices if network is unavailable
-            for ticker in TRACKED_UNIVERSE[:8]:
+            try:
+                from app.services.market_streamer import market_streamer
+                if market_streamer.stocks:
+                    for sym, s in market_streamer.stocks.items():
+                        comp = COMPANY_PROFILES.get(sym, {}).get("companyName", f"{sym} Limited")
+                        vol = s.get("volume", 2000000)
+                        vol_str = f"{round(vol / 1000000, 1)}M"
+                        movers.append({
+                            "ticker": sym,
+                            "price": s.get("price", 1000.0),
+                            "change_pct": s.get("change_pct", 0.0),
+                            "change_abs": s.get("change", 0.0),
+                            "company": comp,
+                            "volume": vol_str,
+                        })
+            except Exception:
+                pass
+
+        if not movers:
+            sample_variations = {
+                "HINDUNILVR": 1.45, "BHARTIARTL": 1.12, "ITC": 0.88, "ASIANPAINT": 0.65, "RELIANCE": 0.35,
+                "TCS": -1.42, "MARUTI": -1.25, "HDFCBANK": -0.95, "AXISBANK": -0.78, "INFY": -0.55
+            }
+            for ticker, var_pct in sample_variations.items():
                 p = FALLBACK_PRICES.get(ticker, 1339.70)
+                chg = round(p * (var_pct / 100.0), 2)
                 movers.append({
                     "ticker": ticker,
                     "price": p,
-                    "change_pct": 0.85,
-                    "change_abs": round(p * 0.0085, 2),
+                    "change_pct": var_pct,
+                    "change_abs": chg,
                     "company": COMPANY_PROFILES.get(ticker, {}).get("companyName", f"{ticker} Limited"),
                     "volume": "4.2M",
                 })
 
-        movers.sort(key=lambda m: m["change_pct"], reverse=True)
-        gainers = [m for m in movers if m["change_pct"] >= 0][:limit]
-        losers = sorted([m for m in movers if m["change_pct"] < 0], key=lambda m: m["change_pct"])[:limit]
+        gainers_all = [m for m in movers if m["change_pct"] >= 0]
+        gainers_all.sort(key=lambda m: m["change_pct"], reverse=True)
+        gainers = gainers_all[:limit]
+
+        losers_all = [m for m in movers if m["change_pct"] < 0]
+        losers_all.sort(key=lambda m: m["change_pct"])
+        losers = losers_all[:limit]
 
         result = {"gainers": gainers, "losers": losers}
-        self.cache.set(cache_key, result, ttl=30)
+        self.cache.set(cache_key, result, ttl=10)
         return result
 
     def get_market_overview(self) -> List[dict]:

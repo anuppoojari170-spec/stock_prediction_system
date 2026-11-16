@@ -14,6 +14,7 @@ CACHE_FILE = os.path.join(DATA_DIR, "nse_equities.json")
 
 
 # Popular brand aliases for Indian companies whose official listed name or symbol differs from their consumer brand
+# Also includes common index and exchange queries (e.g. NIFTY, BANKNIFTY, SENSEX, NSE, BSE)
 POPULAR_BRAND_ALIASES: Dict[str, str] = {
     "ZOMATO": "ETERNAL",
     "BLINKIT": "ETERNAL",
@@ -25,6 +26,13 @@ POPULAR_BRAND_ALIASES: Dict[str, str] = {
     "JIO": "JIOFIN",
     "JIOFINANCIAL": "JIOFIN",
     "PAYTM": "PAYTM",
+    "NSE": "NIFTY 50",
+    "NIFTY": "NIFTY 50",
+    "NIFTY50": "NIFTY 50",
+    "BANKNIFTY": "BANK NIFTY",
+    "NIFTYBANK": "BANK NIFTY",
+    "SENSEX": "SENSEX",
+    "BOMBAY": "BSE",
 }
 
 
@@ -33,12 +41,29 @@ class NSEUniverseService:
     Dynamic NSE Stock Universe Manager.
     Automatically maintains and searches the complete list of all 2,600+ equities
     listed on the National Stock Exchange of India (NSE), eliminating hardcoded lists.
+    Also incorporates major benchmark indices and index ETFs for seamless trader lookup.
     """
 
     def __init__(self):
         self.stocks: Dict[str, str] = {}  # SYMBOL -> Full Company Name
         self.normalized_names: Dict[str, str] = {}  # Clean Name -> SYMBOL
         self._load_or_fetch_universe()
+
+    def _ensure_benchmark_assets(self):
+        """Ensure benchmark indices and popular tradeable index ETFs are searchable."""
+        benchmarks = {
+            "NIFTY 50": "NIFTY 50 (NSE Benchmark Index - Top 50 Indian Equities)",
+            "BANK NIFTY": "NIFTY Bank (NSE Banking Sector Benchmark Index)",
+            "SENSEX": "BSE SENSEX (BSE 30 Benchmark Index)",
+            "NIFTY IT": "NIFTY IT (NSE Technology Sector Benchmark Index)",
+            "BSE": "BSE Limited (Bombay Stock Exchange Listed Equity)",
+            "NIFTYBEES": "Nippon India ETF Nifty 50 BeES (Tradeable Nifty Index ETF)",
+            "BANKBEES": "Nippon India ETF Nifty Bank BeES (Tradeable Bank Index ETF)",
+            "GOLDBEES": "Nippon India ETF Gold BeES (Tradeable Gold Asset ETF)",
+        }
+        for sym, name in benchmarks.items():
+            if sym not in self.stocks:
+                self.stocks[sym] = name
 
     def _load_or_fetch_universe(self):
         """Load from local cache if exists, otherwise fetch official CSV from NSE India."""
@@ -47,6 +72,7 @@ class NSEUniverseService:
             try:
                 with open(CACHE_FILE, "r", encoding="utf-8") as f:
                     self.stocks = json.load(f)
+                self._ensure_benchmark_assets()
                 self._build_normalized_index()
                 logger.info(f"Loaded {len(self.stocks)} NSE equities from cache.")
                 return
@@ -54,6 +80,8 @@ class NSEUniverseService:
                 logger.warning(f"Failed to read cached NSE equities: {e}. Re-fetching...")
 
         self.refresh_from_nse()
+        self._ensure_benchmark_assets()
+        self._build_normalized_index()
 
     def refresh_from_nse(self) -> int:
         """Download latest official equity list directly from National Stock Exchange of India."""
